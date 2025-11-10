@@ -11,7 +11,6 @@ export default function AdminDocumentsPage() {
           <h2 className="text-3xl font-bold text-gray-900">Documents Administration</h2>
           <p className="text-gray-600">Manage document requests and submissions</p>
         </div>
-
         {/* Stats Cards */}
         <DocumentsStats />
 
