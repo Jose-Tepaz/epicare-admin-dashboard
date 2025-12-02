@@ -63,7 +63,7 @@ export function AdminOverview() {
         <CardContent>
           {statusData.length > 0 ? (
             <>
-              <ResponsiveContainer width="100%" height={250}>
+              <ResponsiveContainer width="100%" height={350}>
                 <PieChart>
                   <Pie
                     data={statusData}
@@ -73,20 +73,26 @@ export function AdminOverview() {
                     outerRadius={100}
                     paddingAngle={5}
                     dataKey="value"
+                    label={({ name, value }) => `${name}: ${value}%`}
                   >
                     {statusData.map((entry, index) => (
                       <Cell key={`cell-${index}`} fill={entry.color} />
                     ))}
                   </Pie>
-                  <Tooltip />
+                  <Tooltip 
+                    formatter={(value: number, name: string, props: any) => [
+                      `${props.payload.count || 0} aplicaciones (${value}%)`,
+                      props.payload.name
+                    ]}
+                  />
                 </PieChart>
               </ResponsiveContainer>
               <div className="flex justify-center gap-4 mt-4 flex-wrap">
-                {statusData.map((item) => (
+                {statusData.map((item: any) => (
                   <div key={item.name} className="flex items-center gap-2">
                     <div className="w-3 h-3 rounded-full" style={{ backgroundColor: item.color }} />
                     <span className="text-sm text-gray-600">
-                      {item.name}: {item.value}%
+                      {item.name}: {item.count || 0} ({item.value}%)
                     </span>
                   </div>
                 ))}

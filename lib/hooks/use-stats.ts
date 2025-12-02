@@ -217,7 +217,7 @@ export function useAdminChartData() {
 
       setMonthlyData(Array.from(monthlyMap.values()).slice(-6))
 
-      // Calcular distribución de status
+      // Calcular distribución de status - mostrar todos los estados individuales
       const statusMap = new Map<string, number>()
       applications?.forEach((app: any) => {
         const count = statusMap.get(app.status) || 0
@@ -225,23 +225,31 @@ export function useAdminChartData() {
       })
 
       const total = applications?.length || 1
-      const statusDistribution = [
-        {
-          name: 'Approved',
-          value: Math.round(((statusMap.get('approved') || 0) + (statusMap.get('active') || 0)) / total * 100),
-          color: '#10B981'
-        },
-        {
-          name: 'Pending',
-          value: Math.round(((statusMap.get('submitted') || 0) + (statusMap.get('pending_approval') || 0)) / total * 100),
-          color: '#F59E0B'
-        },
-        {
-          name: 'Under Review',
-          value: Math.round((statusMap.get('draft') || 0) / total * 100),
-          color: '#3B82F6'
-        },
-      ].filter(item => item.value > 0)
+      
+      // Mapeo de estados a colores y nombres legibles
+      const statusConfig: Record<string, { name: string; color: string }> = {
+        'draft': { name: 'Draft', color: '#6B7280' }, // Gray
+        'submitted': { name: 'Submitted', color: '#3B82F6' }, // Blue
+        'pending_approval': { name: 'Pending Approval', color: '#F59E0B' }, // Orange
+        'approved': { name: 'Approved', color: '#10B981' }, // Green
+        'rejected': { name: 'Rejected', color: '#EF4444' }, // Red
+        'active': { name: 'Active', color: '#059669' }, // Dark Green
+        'cancelled': { name: 'Cancelled', color: '#9CA3AF' }, // Light Gray
+      }
+
+      // Crear array con todos los estados que tienen aplicaciones
+      const statusDistribution = Array.from(statusMap.entries())
+        .map(([status, count]) => {
+          const config = statusConfig[status] || { name: status, color: '#6B7280' }
+          return {
+            name: config.name,
+            value: Math.round((count / total) * 100),
+            count: count,
+            color: config.color
+          }
+        })
+        .filter(item => item.value > 0) // Solo mostrar estados con aplicaciones
+        .sort((a, b) => b.count - a.count) // Ordenar por cantidad descendente
 
       setStatusData(statusDistribution)
 
