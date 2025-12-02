@@ -221,10 +221,13 @@ export function DocumentsManager() {
     console.log('Documents in manager:', documents.length, documents)
   }, [documents])
   const { downloadDocument, downloading } = useDownloadDocument()
-  const { viewDocument, viewing } = useViewDocument()
+  const { viewDocument } = useViewDocument()
   const { updateDocumentStatus, updating } = useUpdateDocumentStatus()
   const { fulfillRequest, fulfilling } = useFulfillDocumentRequest()
   const { cancelRequest, cancelling } = useCancelDocumentRequest()
+  
+  // Estado local para tracking de qué documento está siendo visualizado
+  const [viewingDocId, setViewingDocId] = useState<string | null>(null)
 
   const handleVerifyDocument = async (docId: string) => {
     const success = await updateDocumentStatus(docId, 'under_review')
@@ -272,8 +275,16 @@ export function DocumentsManager() {
     await downloadDocument(fileUrl, fileName)
   }
 
-  const handleView = async (fileUrl: string, mimeType: string | null) => {
-    await viewDocument(fileUrl, mimeType)
+  const handleView = async (fileUrl: string, mimeType: string | null, docId: string) => {
+    setViewingDocId(docId)
+    try {
+      await viewDocument(fileUrl, mimeType)
+    } finally {
+      // Reset después de un pequeño delay para permitir que la nueva pestaña se abra
+      setTimeout(() => {
+        setViewingDocId(null)
+      }, 500)
+    }
   }
 
   const getApplicationInfo = (doc: any) => {
@@ -522,11 +533,11 @@ export function DocumentsManager() {
                                 size="sm" 
                                 variant="outline" 
                                 className="h-8 w-8 p-0 bg-transparent"
-                                onClick={() => handleView(doc.file_url, doc.mime_type)}
-                                disabled={viewing}
+                                onClick={() => handleView(doc.file_url, doc.mime_type, doc.id)}
+                                disabled={viewingDocId === doc.id}
                                 title="Ver documento"
                               >
-                                {viewing ? (
+                                {viewingDocId === doc.id ? (
                                   <Loader2 className="h-4 w-4 animate-spin" />
                                 ) : (
                                   <Eye className="h-4 w-4" />
@@ -772,10 +783,17 @@ export function DocumentsManager() {
                             <Button
                               size="sm"
                               variant="outline"
-                              onClick={() => handleView(request.document!.file_url, null)}
+                              onClick={() => handleView(request.document!.file_url, null, request.document!.id)}
+                              disabled={viewingDocId === request.document!.id}
                             >
-                              <Eye className="h-4 w-4 mr-1" />
-                              View Document
+                              {viewingDocId === request.document!.id ? (
+                                <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                              ) : (
+                                <>
+                                  <Eye className="h-4 w-4 mr-1" />
+                                  View Document
+                                </>
+                              )}
                             </Button>
                           )}
                         </div>
