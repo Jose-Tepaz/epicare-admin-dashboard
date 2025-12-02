@@ -8,8 +8,8 @@ import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
-import { Eye, Search, Loader2, Mail, Phone, Shield, UserPlus, Trash2 } from "lucide-react"
-import { useUsers, useDeleteUser } from "@/lib/hooks/use-users"
+import { Eye, Search, Loader2, Mail, Phone, Shield, UserPlus, Trash2, MailPlus, Copy, Check } from "lucide-react"
+import { useUsers, useDeleteUser, useResendInvite } from "@/lib/hooks/use-users"
 import { useAdminAuth } from "@/contexts/admin-auth-context"
 import {
   AlertDialog,
@@ -22,9 +22,18 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 import { NewUserModal } from "@/components/new-user-modal"
 import { format } from "date-fns"
 import { es } from "date-fns/locale"
+import { toast } from "sonner"
 
 const getInitials = (firstName: string | null, lastName: string | null, email: string) => {
   if (firstName && lastName) {
@@ -41,6 +50,9 @@ export function UsersTable() {
   const [roleFilter, setRoleFilter] = useState("all")
   const [page, setPage] = useState(1)
   const [modalOpen, setModalOpen] = useState(false)
+  const [inviteLinkModal, setInviteLinkModal] = useState(false)
+  const [inviteLink, setInviteLink] = useState<string | null>(null)
+  const [linkCopied, setLinkCopied] = useState(false)
 
   const { users, loading, error, pagination, refetch } = useUsers(
     {
@@ -52,11 +64,33 @@ export function UsersTable() {
 
   const { isSuperAdmin, isAdmin, user: currentUser } = useAdminAuth()
   const { deleteUser, deleting } = useDeleteUser()
+  const { resendInvite, resending } = useResendInvite()
 
   const handleDeleteUser = async (userId: string, userEmail: string) => {
     const result = await deleteUser(userId)
     if (result.success) {
       refetch()
+    }
+  }
+
+  const handleResendInvite = async (userId: string, userEmail: string) => {
+    const result = await resendInvite(userId)
+    if (result.success) {
+      // Si hay actionLink, mostrarlo en un modal
+      if (result.actionLink) {
+        setInviteLink(result.actionLink)
+        setInviteLinkModal(true)
+        setLinkCopied(false)
+      }
+    }
+  }
+
+  const handleCopyLink = () => {
+    if (inviteLink) {
+      navigator.clipboard.writeText(inviteLink)
+      setLinkCopied(true)
+      toast.success('Link copiado al portapapeles')
+      setTimeout(() => setLinkCopied(false), 2000)
     }
   }
 
@@ -114,7 +148,7 @@ export function UsersTable() {
                 <SelectItem value="super_admin">Super Admin</SelectItem>
                 <SelectItem value="admin">Admin</SelectItem>
                 <SelectItem value="support_staff">Support Staff</SelectItem>
-                <SelectItem value="user">User</SelectItem>
+                <SelectItem value="cliente">Cliente</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -194,6 +228,12 @@ export function UsersTable() {
                             ) : (
                               <Badge variant="outline" className="text-xs">user</Badge>
                             )}
+                            {/* Badge de estado del perfil */}
+                            {!user.profile_completed && (
+                              <Badge variant="outline" className="text-xs text-amber-600 border-amber-300 bg-amber-50">
+                                Pendiente
+                              </Badge>
+                            )}
                           </div>
                         </td>
                         <td className="py-3 px-4">
@@ -214,6 +254,23 @@ export function UsersTable() {
                                 Ver
                               </Button>
                             </Link>
+                            {/* Botón para reenviar invitación - solo si el perfil no está completado */}
+                            {(isAdmin || isSuperAdmin) && !user.profile_completed && (
+                              <Button 
+                                variant="ghost" 
+                                size="sm"
+                                className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                                disabled={resending}
+                                onClick={() => handleResendInvite(user.id, user.email)}
+                                title="Reenviar invitación"
+                              >
+                                {resending ? (
+                                  <Loader2 className="h-4 w-4 animate-spin" />
+                                ) : (
+                                  <MailPlus className="h-4 w-4" />
+                                )}
+                              </Button>
+                            )}
                             {canDeleteUser(user) && (
                               <AlertDialog>
                                 <AlertDialogTrigger asChild>
@@ -314,6 +371,58 @@ export function UsersTable() {
           refetch()
         }}
       />
+      
+      {/* Modal para mostrar el link de invitación */}
+      <Dialog open={inviteLinkModal} onOpenChange={setInviteLinkModal}>
+        <DialogContent className="sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Link de Invitación Generado</DialogTitle>
+            <DialogDescription>
+              Copia este link y envíaselo al usuario manualmente. El link le permitirá establecer su contraseña.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="relative">
+              <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
+                <code className="text-xs break-all text-gray-700">
+                  {inviteLink}
+                </code>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+              <Shield className="h-4 w-4 text-blue-600 flex-shrink-0" />
+              <p className="text-sm text-blue-800">
+                <strong>Nota:</strong> En desarrollo, Supabase puede no enviar correos automáticamente. 
+                Usa este link para pruebas.
+              </p>
+            </div>
+          </div>
+          <DialogFooter className="flex-col sm:flex-row gap-2">
+            <Button
+              variant="outline"
+              onClick={() => setInviteLinkModal(false)}
+            >
+              Cerrar
+            </Button>
+            <Button
+              onClick={handleCopyLink}
+              className="gap-2"
+            >
+              {linkCopied ? (
+                <>
+                  <Check className="h-4 w-4" />
+                  Copiado!
+                </>
+              ) : (
+                <>
+                  <Copy className="h-4 w-4" />
+                  Copiar Link
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Card>
   )
 }

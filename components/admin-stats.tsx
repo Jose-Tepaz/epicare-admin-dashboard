@@ -3,9 +3,11 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Users, FileText, ClipboardList, UserCheck, Loader2 } from "lucide-react"
 import { useAdminStats } from "@/lib/hooks/use-stats"
+import { useAdminAuth } from "@/contexts/admin-auth-context"
 
 export function AdminStats() {
   const { stats, loading, error } = useAdminStats()
+  const { isAgent, isSupportStaff, userScope } = useAdminAuth()
 
   if (loading) {
     return (
@@ -33,9 +35,37 @@ export function AdminStats() {
 
   if (!stats) return null
 
+  // Configuración de títulos según rol
+  const getStatsTitle = () => {
+    if (isAgent) {
+      return {
+        applications: "Mis Applications",
+        users: "Mis Clientes",
+        pending: "Pendientes",
+        approved: "Aprobadas",
+      }
+    } else if (isSupportStaff && userScope === 'agent_specific') {
+      return {
+        applications: "Applications Asignadas",
+        users: "Clientes Asignados",
+        pending: "Tickets Pendientes",
+        approved: "Tickets Resueltos",
+      }
+    } else {
+      return {
+        applications: "Total Applications",
+        users: "Total Usuarios",
+        pending: "Pendientes",
+        approved: "Aprobadas",
+      }
+    }
+  }
+
+  const titles = getStatsTitle()
+
   const statsConfig = [
     {
-      title: "Total Applications",
+      title: titles.applications,
       value: stats.totalApplications.toString(),
       subtitle: `${stats.applicationsThisMonth} este mes`,
       icon: ClipboardList,
@@ -43,7 +73,7 @@ export function AdminStats() {
       bgColor: "bg-blue-50",
     },
     {
-      title: "Active Users",
+      title: titles.users,
       value: stats.activeUsers.toString(),
       subtitle: `${stats.newUsersThisMonth} nuevos este mes`,
       icon: Users,
@@ -51,7 +81,7 @@ export function AdminStats() {
       bgColor: "bg-green-50",
     },
     {
-      title: "Pending Review",
+      title: titles.pending,
       value: stats.pendingApplications.toString(),
       subtitle: "Requieren atención",
       icon: FileText,
@@ -59,7 +89,7 @@ export function AdminStats() {
       bgColor: "bg-orange-50",
     },
     {
-      title: "Approved",
+      title: titles.approved,
       value: stats.approvedApplications.toString(),
       subtitle: `${stats.rejectedApplications} rechazadas`,
       icon: UserCheck,

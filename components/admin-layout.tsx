@@ -27,11 +27,12 @@ export function AdminLayout({ children, currentPage = "Dashboard" }: AdminLayout
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const { user, userRoles, signOut, isAdmin } = useAdminAuth()
 
-  const getInitials = (email: string) => {
+  const getInitials = (email: string | undefined | null) => {
+    if (!email) return 'U'
     return email.slice(0, 2).toUpperCase()
   }
 
-  const primaryRole = userRoles[0]?.name || 'user'
+  const primaryRole = userRoles[0]?.name || 'cliente'
 
   return (
     <div className="flex h-screen bg-gray-50">
@@ -168,7 +169,9 @@ export function AdminLayout({ children, currentPage = "Dashboard" }: AdminLayout
                   <span className="text-white text-sm font-medium">{getInitials(user.email)}</span>
                 </div>
                 <div className="flex flex-col">
-                  <span className="text-sm font-medium text-gray-700">{user.email.split('@')[0]}</span>
+                  <span className="text-sm font-medium text-gray-700">
+                    {user.email ? user.email.split('@')[0] : 'Usuario'}
+                  </span>
                   <Badge variant="secondary" className="text-xs">
                     {primaryRole}
                   </Badge>

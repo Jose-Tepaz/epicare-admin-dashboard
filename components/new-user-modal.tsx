@@ -19,11 +19,14 @@ interface NewUserModalProps {
 export function NewUserModal({ open, onOpenChange, onSuccess }: NewUserModalProps) {
   const [formData, setFormData] = useState({
     email: "",
-    password: "",
     first_name: "",
     last_name: "",
     phone: "",
-    roleId: "",
+    address: "",
+    state: "",
+    city: "",
+    zipcode: "",
+    role: "", // ✅ Cambiado de roleId a role
   })
   const [errors, setErrors] = useState<Record<string, string>>({})
   const { createUser, creating } = useCreateUser()
@@ -43,11 +46,14 @@ export function NewUserModal({ open, onOpenChange, onSuccess }: NewUserModalProp
     if (!open) {
       setFormData({
         email: "",
-        password: "",
         first_name: "",
         last_name: "",
         phone: "",
-        roleId: "",
+        address: "",
+        state: "",
+        city: "",
+        zipcode: "",
+        role: "",
       })
       setErrors({})
     }
@@ -62,10 +68,16 @@ export function NewUserModal({ open, onOpenChange, onSuccess }: NewUserModalProp
       newErrors.email = "El email no es válido"
     }
 
-    if (!formData.password.trim()) {
-      newErrors.password = "La contraseña es requerida"
-    } else if (formData.password.length < 6) {
-      newErrors.password = "La contraseña debe tener al menos 6 caracteres"
+    if (!formData.first_name.trim()) {
+      newErrors.first_name = "El nombre es requerido"
+    }
+
+    if (!formData.last_name.trim()) {
+      newErrors.last_name = "El apellido es requerido"
+    }
+
+    if (!formData.role.trim()) {
+      newErrors.role = "El rol es requerido"
     }
 
     setErrors(newErrors)
@@ -81,11 +93,14 @@ export function NewUserModal({ open, onOpenChange, onSuccess }: NewUserModalProp
 
     const result = await createUser({
       email: formData.email.trim(),
-      password: formData.password,
-      first_name: formData.first_name.trim() || undefined,
-      last_name: formData.last_name.trim() || undefined,
+      first_name: formData.first_name.trim(),
+      last_name: formData.last_name.trim(),
       phone: formData.phone.trim() || undefined,
-      roleId: formData.roleId || undefined, // Pasar el roleId al endpoint
+      address: formData.address.trim() || undefined,
+      state: formData.state.trim() || undefined,
+      city: formData.city.trim() || undefined,
+      zipcode: formData.zipcode.trim() || undefined,
+      role: formData.role, // ✅ Cambiado de roleId a role
     })
 
     if (result.success && result.user) {
@@ -94,11 +109,14 @@ export function NewUserModal({ open, onOpenChange, onSuccess }: NewUserModalProp
       // Reset form
       setFormData({
         email: "",
-        password: "",
         first_name: "",
         last_name: "",
         phone: "",
-        roleId: "",
+        address: "",
+        state: "",
+        city: "",
+        zipcode: "",
+        role: "", // ✅ Cambiado de roleId a role
       })
       setErrors({})
       onOpenChange(false)
@@ -122,7 +140,7 @@ export function NewUserModal({ open, onOpenChange, onSuccess }: NewUserModalProp
         <DialogHeader>
           <DialogTitle>Registrar Nuevo Usuario</DialogTitle>
           <DialogDescription>
-            Crea un nuevo usuario en el sistema. El usuario podrá iniciar sesión con el email y contraseña proporcionados.
+            Crea un nuevo usuario en el sistema. El usuario recibirá un correo de invitación para establecer su contraseña y completar su perfil.
           </DialogDescription>
         </DialogHeader>
 
@@ -144,44 +162,39 @@ export function NewUserModal({ open, onOpenChange, onSuccess }: NewUserModalProp
             )}
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="password">
-              Contraseña <span className="text-red-500">*</span>
-            </Label>
-            <Input
-              id="password"
-              type="password"
-              placeholder="Mínimo 6 caracteres"
-              value={formData.password}
-              onChange={(e) => handleChange("password", e.target.value)}
-              className={errors.password ? "border-red-500" : ""}
-            />
-            {errors.password && (
-              <p className="text-sm text-red-500">{errors.password}</p>
-            )}
-          </div>
-
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="first_name">Nombre</Label>
+              <Label htmlFor="first_name">
+                Nombre <span className="text-red-500">*</span>
+              </Label>
               <Input
                 id="first_name"
                 type="text"
                 placeholder="Juan"
                 value={formData.first_name}
                 onChange={(e) => handleChange("first_name", e.target.value)}
+                className={errors.first_name ? "border-red-500" : ""}
               />
+              {errors.first_name && (
+                <p className="text-sm text-red-500">{errors.first_name}</p>
+              )}
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="last_name">Apellido</Label>
+              <Label htmlFor="last_name">
+                Apellido <span className="text-red-500">*</span>
+              </Label>
               <Input
                 id="last_name"
                 type="text"
                 placeholder="Pérez"
                 value={formData.last_name}
                 onChange={(e) => handleChange("last_name", e.target.value)}
+                className={errors.last_name ? "border-red-500" : ""}
               />
+              {errors.last_name && (
+                <p className="text-sm text-red-500">{errors.last_name}</p>
+              )}
             </div>
           </div>
 
@@ -197,26 +210,74 @@ export function NewUserModal({ open, onOpenChange, onSuccess }: NewUserModalProp
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="role">Rol (Opcional)</Label>
+            <Label htmlFor="address">Dirección</Label>
+            <Input
+              id="address"
+              type="text"
+              placeholder="123 Main St"
+              value={formData.address}
+              onChange={(e) => handleChange("address", e.target.value)}
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="city">Ciudad</Label>
+              <Input
+                id="city"
+                type="text"
+                placeholder="Nueva York"
+                value={formData.city}
+                onChange={(e) => handleChange("city", e.target.value)}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="state">Estado</Label>
+              <Input
+                id="state"
+                type="text"
+                placeholder="NY"
+                value={formData.state}
+                onChange={(e) => handleChange("state", e.target.value)}
+              />
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="zipcode">Código Postal</Label>
+            <Input
+              id="zipcode"
+              type="text"
+              placeholder="10001"
+              value={formData.zipcode}
+              onChange={(e) => handleChange("zipcode", e.target.value)}
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="role">
+              Rol <span className="text-red-500">*</span>
+            </Label>
             <Select 
-              value={formData.roleId} 
-              onValueChange={(value) => handleChange("roleId", value)}
+              value={formData.role} 
+              onValueChange={(value) => handleChange("role", value)}
               disabled={rolesLoading || creating}
             >
-              <SelectTrigger id="role">
-                <SelectValue placeholder="Seleccionar rol (opcional)" />
+              <SelectTrigger id="role" className={errors.role ? "border-red-500" : ""}>
+                <SelectValue placeholder="Seleccionar rol" />
               </SelectTrigger>
               <SelectContent>
                 {filteredRoles.map((role) => (
-                  <SelectItem key={role.id} value={role.id}>
+                  <SelectItem key={role.id} value={role.name}>
                     {role.name}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
-            <p className="text-xs text-gray-500">
-              Puedes asignar un rol al usuario ahora o hacerlo más tarde desde su perfil.
-            </p>
+            {errors.role && (
+              <p className="text-sm text-red-500">{errors.role}</p>
+            )}
           </div>
 
           <div className="flex justify-end gap-2 pt-4">

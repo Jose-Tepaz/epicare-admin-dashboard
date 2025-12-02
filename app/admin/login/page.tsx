@@ -1,84 +1,167 @@
 "use client"
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { createClient } from '@/lib/supabase/client'
+import { createBrowserClient } from '@supabase/ssr'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { AlertCircle, Loader2 } from 'lucide-react'
 
-export default function AdminLoginPage() {
+function AdminLogin() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const router = useRouter()
   const searchParams = useSearchParams()
-  const supabase = createClient()
+  
+  // Usar createBrowserClient de @supabase/ssr (recomendado para Next.js)
+  // Esto evita múltiples instancias y conflictos
+  const supabase = createBrowserClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  )
+
+  // Verificar si ya hay una sesión activa y redirigir
+  useEffect(() => {
+    const checkSession = async () => {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (session?.user) {
+        console.log('✅ Sesión activa detectada, redirigiendo a /admin...')
+        router.push('/admin')
+      }
+    }
+    checkSession()
+  }, [supabase, router])
 
   useEffect(() => {
-    // Mostrar errores de la URL (de redirección del middleware)
-    const errorParam = searchParams.get('error')
-    if (errorParam === 'access_denied') {
-      setError('No tienes permisos para acceder al panel de administración.')
-    } else if (errorParam === 'role_check_failed') {
-      setError('Error al verificar permisos. Por favor intenta nuevamente.')
+    // Detectar si viene de una invitación (hash fragment con access_token)
+    const checkInvitation = async () => {
+      const hash = window.location.hash
+      console.log('🔍 Hash fragment detectado:', hash)
+      
+      if (hash && hash.includes('access_token')) {
+        const hashParams = new URLSearchParams(hash.substring(1))
+        const accessToken = hashParams.get('access_token')
+        const refreshToken = hashParams.get('refresh_token')
+        const type = hashParams.get('type')
+        
+        console.log('🔑 Tokens detectados:', { 
+          hasAccessToken: !!accessToken, 
+          hasRefreshToken: !!refreshToken, 
+          type 
+        })
+
+        if (accessToken && refreshToken) {
+          console.log('📧 Tokens de invitación detectados, redirigiendo a set-password...')
+          
+          // Redirigir DIRECTAMENTE a set-password con el hash preservado
+          // set-password se encargará de establecer la sesión
+          window.location.href = `/admin/set-password${hash}`
+          return
+        }
+        // Si hay token, no mostrar errores de acceso denegado
+        return
+      }
+
+      // Solo mostrar errores si NO hay token en el hash
+      const errorParam = searchParams.get('error')
+      if (errorParam === 'access_denied') {
+        setError('No tienes permisos para acceder al panel de administración.')
+      } else if (errorParam === 'role_check_failed') {
+        setError('Error al verificar permisos. Por favor intenta nuevamente.')
+      }
     }
-  }, [searchParams])
+
+    checkInvitation()
+  }, [searchParams, router, supabase])
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
     setError('')
 
+    console.log('🔐 Iniciando login...')
+    console.log('📧 Email:', email)
+    console.log('🔗 Supabase URL:', process.env.NEXT_PUBLIC_SUPABASE_URL)
+
     try {
       // Intentar login
+      console.log('⏳ Llamando a signInWithPassword...')
+      
       const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
         email,
         password,
       })
 
+      console.log('📧 Respuesta de signInWithPassword recibida!')
+      console.log('📧 Datos:', {
+        hasUser: !!authData?.user,
+        userId: authData?.user?.id,
+        hasError: !!authError,
+        errorMessage: authError?.message
+      })
+
       if (authError) {
+        console.error('❌ Error de autenticación:', authError)
         setError('Email o contraseña incorrectos.')
         setLoading(false)
         return
       }
 
       if (!authData.user) {
+        console.error('❌ No se recibió usuario')
         setError('Error al iniciar sesión.')
         setLoading(false)
         return
       }
 
-      // Verificar roles del usuario
-      const { data: userRoles, error: rolesError } = await supabase
-        .from('user_roles')
-        .select(`
-          roles:role_id (
-            name
-          )
-        `)
-        .eq('user_id', authData.user.id)
-
-      if (rolesError) {
-        console.error('Error checking roles:', rolesError)
-        console.error('User ID:', authData.user.id)
-        setError(`Error al verificar permisos: ${rolesError.message}`)
-        await supabase.auth.signOut()
-        setLoading(false)
-        return
+      // Verificar rol del usuario
+      console.log('👤 Verificando rol del usuario:', authData.user.id)
+      
+      // Primero intentar obtener el rol del user_metadata (más rápido)
+      let userRole = authData.user.user_metadata?.role || authData.user.app_metadata?.role
+      
+      console.log('📋 Rol desde metadata:', userRole)
+      
+      // Si no hay rol en metadata, consultar la tabla users
+      if (!userRole) {
+        console.log('⏳ Rol no encontrado en metadata, consultando tabla users...')
+        
+        try {
+          // Usar fetch directo en lugar de Supabase client para evitar RLS
+          const response = await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/rest/v1/users?id=eq.${authData.user.id}&select=role`, {
+            headers: {
+              'apikey': process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+              'Authorization': `Bearer ${authData.session?.access_token}`,
+              'Content-Type': 'application/json',
+            },
+            signal: AbortSignal.timeout(5000) // 5 second timeout
+          })
+          
+          if (response.ok) {
+            const data = await response.json()
+            userRole = data[0]?.role
+            console.log('✅ Rol obtenido de la tabla:', userRole)
+          } else {
+            console.error('❌ Error en fetch:', response.status, response.statusText)
+          }
+        } catch (err: any) {
+          console.error('❌ Error consultando rol:', err.message)
+        }
       }
 
-      console.log('User roles data:', userRoles)
+      console.log('🔑 Verificación de acceso:', {
+        userRole,
+        allowedRoles: ['super_admin', 'admin', 'agent', 'support_staff']
+      })
 
-      const roles = userRoles?.map((ur: any) => ur.roles?.name).filter(Boolean) || []
-      const hasAdminAccess = roles.some((role: string) => 
-        ['super_admin', 'admin', 'support_staff'].includes(role)
-      )
+      const hasAdminAccess = userRole && ['super_admin', 'admin', 'agent', 'support_staff'].includes(userRole)
 
       if (!hasAdminAccess) {
+        console.error('❌ Usuario sin permisos de admin')
         setError('No tienes permisos para acceder al panel de administración.')
         await supabase.auth.signOut()
         setLoading(false)
@@ -86,8 +169,15 @@ export default function AdminLoginPage() {
       }
 
       // Login exitoso con permisos correctos
-      router.push('/admin')
-      router.refresh()
+      console.log('✅ Login exitoso! Redirigiendo a /admin...')
+      console.log('⏳ Esperando 500ms para que las cookies se establezcan...')
+      
+      // Esperar un momento para que las cookies se establezcan
+      await new Promise(resolve => setTimeout(resolve, 500))
+      
+      console.log('🔄 Redirigiendo con window.location.href...')
+      // Forzar recarga completa de la página para asegurar que el middleware vea la sesión
+      window.location.href = '/admin'
     } catch (err) {
       console.error('Login error:', err)
       setError('Error inesperado al iniciar sesión.')
@@ -172,3 +262,17 @@ export default function AdminLoginPage() {
   )
 }
 
+export default function AdminLoginPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="text-center">
+          <Loader2 className="h-8 w-8 animate-spin text-primary mx-auto" />
+          <p className="mt-4 text-sm text-gray-600">Cargando...</p>
+        </div>
+      </div>
+    }>
+      <AdminLogin />
+    </Suspense>
+  )
+}

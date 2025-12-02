@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { UserFilters, PaginationParams, AdminUser } from '@/lib/types/admin'
+import { useAdminAuth } from '@/contexts/admin-auth-context'
 import { toast } from 'sonner'
 
 export interface UserWithStats {
@@ -12,6 +13,7 @@ export interface UserWithStats {
   last_name: string | null
   phone: string | null
   created_at: string
+  profile_completed: boolean | null
   roles: Array<{
     id: string
     name: string
@@ -24,6 +26,7 @@ export function useUsers(
   filters: UserFilters = {},
   pagination: PaginationParams = { page: 1, pageSize: 25 }
 ) {
+  const { user, loading: authLoading } = useAdminAuth()
   const [users, setUsers] = useState<UserWithStats[]>([])
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(true)
@@ -35,10 +38,17 @@ export function useUsers(
   }, [filters.role])
 
   const fetchUsers = useCallback(async () => {
+    // Esperar a que la autenticación esté lista
+    if (authLoading || !user) {
+      return
+    }
+
     try {
       setLoading(true)
       setError(null)
       const supabase = createClient()
+
+      console.log('🔄 Fetching users with filters:', { roleKey, search: filters.search, page: pagination.page })
 
       // Obtener usuarios
       let query = supabase
@@ -49,7 +59,9 @@ export function useUsers(
           first_name,
           last_name,
           phone,
-          created_at
+          role,
+          created_at,
+          profile_completed
         `, { count: 'exact' })
 
       // Aplicar filtros de fecha
@@ -76,37 +88,44 @@ export function useUsers(
       const { data: usersData, error: fetchError, count } = await query
 
       if (fetchError) {
-        console.error('Supabase query error:', fetchError)
+        console.error('❌ Supabase query error:', fetchError)
         throw fetchError
       }
 
-      console.log('Users fetched:', usersData?.length || 0, 'users')
+      console.log('✅ Users fetched:', usersData?.length || 0, 'users')
 
-      // Para cada usuario, obtener sus roles y count de applications
+      // Para cada usuario, obtener count de applications
+      // ✅ Ahora usamos users.role directamente (ya viene en la query)
       const usersWithDetails = await Promise.all(
         (usersData || []).map(async (user: any) => {
-          // Obtener roles
-          const { data: userRoles } = await supabase
-            .from('user_roles')
-            .select(`
-              roles:role_id (
-                id,
-                name,
-                description
-              )
-            `)
-            .eq('user_id', user.id)
+          try {
+            // Obtener count de applications
+            const { count: appCount } = await supabase
+              .from('applications')
+              .select('*', { count: 'exact', head: true })
+              .eq('user_id', user.id)
 
-          // Obtener count de applications
-          const { count: appCount } = await supabase
-            .from('applications')
-            .select('*', { count: 'exact', head: true })
-            .eq('user_id', user.id)
-
-          return {
-            ...user,
-            roles: userRoles?.map((ur: any) => ur.roles).filter(Boolean) || [],
-            application_count: appCount || 0,
+            return {
+              ...user,
+              // Convertir role string a formato de array para compatibilidad con código existente
+              roles: user.role ? [{ 
+                id: user.role, 
+                name: user.role, 
+                description: null 
+              }] : [],
+              application_count: appCount || 0,
+            }
+          } catch (err) {
+            console.error(`Error fetching details for user ${user.id}:`, err)
+            return {
+              ...user,
+              roles: user.role ? [{ 
+                id: user.role, 
+                name: user.role, 
+                description: null 
+              }] : [],
+              application_count: 0,
+            }
           }
         })
       )
@@ -119,19 +138,25 @@ export function useUsers(
         )
       }
 
+      console.log('✅ Setting users:', filteredUsers.length)
       setUsers(filteredUsers)
       setTotal(count || 0)
     } catch (err) {
-      console.error('Error fetching users:', err)
+      console.error('❌ Error fetching users:', err)
       setError(err instanceof Error ? err.message : 'Error desconocido')
+      setUsers([])
+      setTotal(0)
     } finally {
       setLoading(false)
     }
   }, [
+    authLoading,
+    user,
     roleKey,
     filters.search,
     filters.startDate,
     filters.endDate,
+    filters.role,
     pagination.page,
     pagination.pageSize
   ])
@@ -176,7 +201,7 @@ export function useUserDetails(userId: string | null) {
       setError(null)
       const supabase = createClient()
 
-      // Obtener usuario
+      // Obtener usuario (✅ role ya viene en el select '*')
       const { data: userData, error: userError } = await supabase
         .from('users')
         .select('*')
@@ -184,19 +209,6 @@ export function useUserDetails(userId: string | null) {
         .single()
 
       if (userError) throw userError
-
-      // Obtener roles
-      const { data: userRoles } = await supabase
-        .from('user_roles')
-        .select(`
-          id,
-          roles:role_id (
-            id,
-            name,
-            description
-          )
-        `)
-        .eq('user_id', userId)
 
       // Obtener applications
       const { data: applications } = await supabase
@@ -214,7 +226,12 @@ export function useUserDetails(userId: string | null) {
 
       setUser({
         ...userData,
-        roles: userRoles?.map((ur: any) => ({ ...ur.roles, user_role_id: ur.id })).filter(Boolean) || [],
+        // ✅ Convertir role string a array para compatibilidad
+        roles: userData.role ? [{ 
+          id: userData.role, 
+          name: userData.role, 
+          description: null 
+        }] : [],
         applications: applications || [],
       })
     } catch (err) {
@@ -348,11 +365,14 @@ export function useCreateUser() {
 
   const createUser = async (userData: {
     email: string
-    password: string
-    first_name?: string
-    last_name?: string
+    first_name: string
+    last_name: string
     phone?: string
-    roleId?: string
+    address?: string
+    state?: string
+    city?: string
+    zipcode?: string
+    role: string // ✅ Ahora espera el nombre del rol directamente
   }) => {
     try {
       setCreating(true)
@@ -524,5 +544,55 @@ export function useDeleteUser() {
   }
 
   return { deleteUser, deleting }
+}
+
+/**
+ * Hook para reenviar invitación a un usuario (solo admin)
+ */
+export function useResendInvite() {
+  const [resending, setResending] = useState(false)
+
+  const resendInvite = async (userId: string) => {
+    try {
+      setResending(true)
+      
+      const response = await fetch('/api/users/resend-invite', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ userId }),
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Error al reenviar la invitación')
+      }
+
+      // Si hay actionLink, mostrar modal con el link
+      if (data.actionLink) {
+        console.log('🔗 Action link disponible:', data.actionLink)
+        toast.success('Link de invitación generado', {
+          description: data.note || 'El link está disponible para copiar',
+          duration: 5000
+        })
+        return { success: true, actionLink: data.actionLink, emailSent: data.emailSent }
+      }
+
+      // Si no hay actionLink, el email se envió automáticamente
+      toast.success(data.message || 'Invitación reenviada correctamente')
+      return { success: true, emailSent: true }
+    } catch (err) {
+      console.error('Error resending invite:', err)
+      const errorMessage = err instanceof Error ? err.message : 'Error al reenviar la invitación'
+      toast.error(errorMessage)
+      return { success: false, error: errorMessage }
+    } finally {
+      setResending(false)
+    }
+  }
+
+  return { resendInvite, resending }
 }
 

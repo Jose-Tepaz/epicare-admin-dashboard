@@ -1,8 +1,7 @@
 "use client"
 
 import type React from "react"
-
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -11,84 +10,119 @@ import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Badge } from "@/components/ui/badge"
-import { Plus, X, Mail, User, FileText, Calendar, AlertCircle } from "lucide-react"
+import { Mail, User, FileText, Calendar, AlertCircle, Loader2, ChevronsUpDown, X } from "lucide-react"
+import { useClientsSearch } from "@/lib/hooks/use-clients-search"
+import { useClientApplications } from "@/lib/hooks/use-client-applications"
+import { useCreateDocumentRequest } from "@/lib/hooks/use-document-requests"
+import type { DocumentType, DocumentRequestPriority } from "@/lib/types/admin"
 
-const documentTypes = [
-  { id: "medical", label: "Medical Certificate", category: "Medical" },
-  { id: "identification", label: "Driver's License", category: "Identification" },
-  { id: "birth-certificate", label: "Birth Certificate", category: "Identification" },
-  { id: "passport", label: "Passport", category: "Identification" },
-  { id: "income-statement", label: "Income Statement", category: "Financial" },
-  { id: "tax-returns", label: "Tax Returns", category: "Financial" },
-  { id: "bank-statements", label: "Bank Statements", category: "Financial" },
-  { id: "property-deed", label: "Property Deed", category: "Property" },
-  { id: "proof-address", label: "Proof of Address", category: "Property" },
-  { id: "insurance-policy", label: "Insurance Policy", category: "Insurance" },
+const documentTypeOptions: { value: DocumentType; label: string }[] = [
+  { value: "medical", label: "Medical Document" },
+  { value: "identification", label: "Identification Document" },
+  { value: "financial", label: "Financial Document" },
+  { value: "property", label: "Property Document" },
+  { value: "other", label: "Other Document" },
 ]
 
-const priorityLevels = [
+const priorityLevels: { value: DocumentRequestPriority; label: string; color: string }[] = [
   { value: "low", label: "Low", color: "bg-gray-100 text-gray-800" },
   { value: "medium", label: "Medium", color: "bg-yellow-100 text-yellow-800" },
-  { value: "high", label: "High", color: "bg-red-100 text-red-800" },
-  { value: "urgent", label: "Urgent", color: "bg-red-200 text-red-900" },
+  { value: "high", label: "High", color: "bg-orange-100 text-orange-800" },
+  { value: "urgent", label: "Urgent", color: "bg-red-100 text-red-800" },
 ]
 
 interface NewDocumentRequestModalProps {
   children: React.ReactNode
+  defaultClientId?: string
+  onSuccess?: () => void
 }
 
-export function NewDocumentRequestModal({ children }: NewDocumentRequestModalProps) {
+export function NewDocumentRequestModal({ children, defaultClientId, onSuccess }: NewDocumentRequestModalProps) {
   const [open, setOpen] = useState(false)
-  const [formData, setFormData] = useState({
-    applicantName: "",
-    applicantEmail: "",
-    requestId: "",
-    priority: "medium",
-    dueDate: "",
-    notes: "",
-    sendEmail: true,
-  })
-  const [selectedDocuments, setSelectedDocuments] = useState<string[]>([])
-  const [customDocument, setCustomDocument] = useState("")
+  const [clientId, setClientId] = useState(defaultClientId || "")
+  const [applicationId, setApplicationId] = useState("")
+  const [documentType, setDocumentType] = useState<DocumentType>("medical")
+  const [priority, setPriority] = useState<DocumentRequestPriority>("medium")
+  const [dueDate, setDueDate] = useState("")
+  const [notes, setNotes] = useState("")
+  const [sendEmail, setSendEmail] = useState(true)
 
-  const handleDocumentToggle = (docId: string) => {
-    setSelectedDocuments((prev) => (prev.includes(docId) ? prev.filter((id) => id !== docId) : [...prev, docId]))
-  }
+  // Client search
+  const [searchTerm, setSearchTerm] = useState("")
+  const [openClientSelect, setOpenClientSelect] = useState(false)
+  const { clients, loading: loadingClients } = useClientsSearch(searchTerm)
 
-  const handleAddCustomDocument = () => {
-    if (customDocument.trim()) {
-      setSelectedDocuments((prev) => [...prev, `custom-${Date.now()}`])
-      setCustomDocument("")
+  // Applications for selected client
+  const { applications, loading: loadingApplications } = useClientApplications(clientId)
+  const [openApplicationSelect, setOpenApplicationSelect] = useState(false)
+
+  // Create request hook
+  const { createRequest, creating } = useCreateDocumentRequest()
+
+  // Reset form when modal closes
+  useEffect(() => {
+    if (!open) {
+      setOpenClientSelect(false)
+      setOpenApplicationSelect(false)
+      setSearchTerm("")
+      if (!defaultClientId) {
+        setClientId("")
+      }
+      setApplicationId("")
+      setDocumentType("medical")
+      setPriority("medium")
+      setDueDate("")
+      setNotes("")
+      setSendEmail(true)
     }
-  }
+  }, [open, defaultClientId])
 
-  const handleRemoveDocument = (docId: string) => {
-    setSelectedDocuments((prev) => prev.filter((id) => id !== docId))
-  }
+  // Set default client if provided
+  useEffect(() => {
+    if (defaultClientId) {
+      setClientId(defaultClientId)
+    }
+  }, [defaultClientId])
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    // Here you would handle the form submission
-    console.log("[v0] New document request:", { formData, selectedDocuments })
-    setOpen(false)
-    // Reset form
-    setFormData({
-      applicantName: "",
-      applicantEmail: "",
-      requestId: "",
-      priority: "medium",
-      dueDate: "",
-      notes: "",
-      sendEmail: true,
-    })
-    setSelectedDocuments([])
+
+    if (!clientId || !documentType) {
+      return
+    }
+
+    const result = await createRequest(
+      clientId,
+      documentType,
+      priority,
+      {
+        applicationId: applicationId || undefined,
+        dueDate: dueDate || undefined,
+        notes: notes || undefined,
+        sendEmail,
+      }
+    )
+
+    if (result) {
+      // Success
+      setOpen(false)
+      onSuccess?.()
+    }
   }
 
-  const getDocumentLabel = (docId: string) => {
-    if (docId.startsWith("custom-")) {
-      return customDocument || "Custom Document"
-    }
-    return documentTypes.find((doc) => doc.id === docId)?.label || docId
+  const getClientLabel = (id: string) => {
+    const client = clients.find((c) => c.id === id)
+    if (!client) return "Select client..."
+    return `${client.first_name || ""} ${client.last_name || ""} (${client.email})`.trim()
+  }
+
+  const getApplicationLabel = (id: string) => {
+    const app = applications.find((a) => a.id === id)
+    if (!app) return "Select application (optional)..."
+    
+    const shortId = app.id.substring(0, 8)
+    const companyName = app.insurance_companies?.name || app.carrier_name || "Unknown"
+    return `${shortId}... - ${companyName}`
   }
 
   return (
@@ -103,59 +137,196 @@ export function NewDocumentRequestModal({ children }: NewDocumentRequestModalPro
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-6">
-          {/* Applicant Information */}
+          {/* Client Selection */}
           <div className="space-y-4">
             <h3 className="text-lg font-medium text-gray-900 flex items-center gap-2">
               <User className="h-4 w-4" />
-              Applicant Information
+              Client Information
             </h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="applicantName">Applicant Name *</Label>
-                <Input
-                  id="applicantName"
-                  value={formData.applicantName}
-                  onChange={(e) => setFormData((prev) => ({ ...prev, applicantName: e.target.value }))}
-                  placeholder="Enter full name"
-                  required
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="applicantEmail">Email Address *</Label>
-                <Input
-                  id="applicantEmail"
-                  type="email"
-                  value={formData.applicantEmail}
-                  onChange={(e) => setFormData((prev) => ({ ...prev, applicantEmail: e.target.value }))}
-                  placeholder="Enter email address"
-                  required
-                />
-              </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="client">Client *</Label>
+              {defaultClientId ? (
+                <div className="p-2 border rounded-md bg-gray-50">
+                  <p className="text-sm">{getClientLabel(clientId)}</p>
+                </div>
+              ) : (
+                <div className="relative">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="w-full justify-between text-left font-normal h-10"
+                    onClick={() => {
+                      setOpenClientSelect(!openClientSelect)
+                      if (!openClientSelect) {
+                        setSearchTerm("")
+                      }
+                    }}
+                  >
+                    <span className="truncate">
+                      {clientId ? getClientLabel(clientId) : "Click to select client..."}
+                    </span>
+                    {loadingClients ? (
+                      <Loader2 className="h-4 w-4 animate-spin text-gray-400 ml-2 shrink-0" />
+                    ) : (
+                      <ChevronsUpDown className="h-4 w-4 text-gray-400 ml-2 shrink-0" />
+                    )}
+                  </Button>
+
+                  {openClientSelect && (
+                    <div className="absolute z-50 w-full mt-1 bg-white border rounded-md shadow-lg">
+                      <div className="p-2 border-b">
+                        <Input
+                          placeholder="Search by name or email..."
+                          value={searchTerm}
+                          onChange={(e) => setSearchTerm(e.target.value)}
+                          className="w-full"
+                        />
+                      </div>
+                      <div className="max-h-60 overflow-y-auto">
+                        {loadingClients ? (
+                          <div className="p-4 text-center text-sm text-gray-500">
+                            <Loader2 className="h-4 w-4 animate-spin mx-auto mb-2" />
+                            Loading clients...
+                          </div>
+                        ) : clients.length === 0 ? (
+                          <div className="p-4 text-center text-sm text-gray-500">
+                            No clients found
+                          </div>
+                        ) : (
+                          clients.map((client) => (
+                            <button
+                              key={client.id}
+                              type="button"
+                              className="w-full text-left px-3 py-2 hover:bg-gray-100 flex flex-col"
+                              onClick={() => {
+                                setClientId(client.id)
+                                setOpenClientSelect(false)
+                                setApplicationId("") // Reset application when client changes
+                              }}
+                            >
+                              <span className="font-medium text-sm">
+                                {client.first_name} {client.last_name}
+                              </span>
+                              <span className="text-xs text-gray-500">{client.email}</span>
+                            </button>
+                          ))
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
+
+            {/* Application Selection (Optional) */}
+            {clientId && (
+              <div className="space-y-2">
+                <Label htmlFor="application">Related Application (Optional)</Label>
+                <div className="relative">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="w-full justify-between text-left font-normal h-10"
+                    onClick={() => setOpenApplicationSelect(!openApplicationSelect)}
+                  >
+                    <span className="truncate">
+                      {applicationId ? getApplicationLabel(applicationId) : "Select application (optional)..."}
+                    </span>
+                    {loadingApplications ? (
+                      <Loader2 className="h-4 w-4 animate-spin text-gray-400 ml-2 shrink-0" />
+                    ) : (
+                      <ChevronsUpDown className="h-4 w-4 text-gray-400 ml-2 shrink-0" />
+                    )}
+                  </Button>
+
+                  {applicationId && (
+                    <button
+                      type="button"
+                      className="absolute right-8 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                      onClick={() => setApplicationId("")}
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  )}
+
+                  {openApplicationSelect && (
+                    <div className="absolute z-50 w-full mt-1 bg-white border rounded-md shadow-lg max-h-60 overflow-y-auto">
+                      {loadingApplications ? (
+                        <div className="p-4 text-center text-sm text-gray-500">
+                          <Loader2 className="h-4 w-4 animate-spin mx-auto mb-2" />
+                          Loading applications...
+                        </div>
+                      ) : applications.length === 0 ? (
+                        <div className="p-4 text-center text-sm text-gray-500">
+                          No applications found for this client
+                        </div>
+                      ) : (
+                        applications.map((app) => {
+                          const shortId = app.id.substring(0, 8)
+                          const companyName = app.insurance_companies?.name || app.carrier_name || "Unknown"
+                          
+                          return (
+                            <button
+                              key={app.id}
+                              type="button"
+                              className="w-full text-left px-3 py-2 hover:bg-gray-100 flex flex-col"
+                              onClick={() => {
+                                setApplicationId(app.id)
+                                setOpenApplicationSelect(false)
+                              }}
+                            >
+                              <div className="flex items-center gap-2">
+                                <span className="text-sm font-medium">{shortId}...</span>
+                                <Badge variant="outline" className="text-xs">{app.status}</Badge>
+                              </div>
+                              <span className="text-xs text-gray-500">{companyName}</span>
+                            </button>
+                          )
+                        })
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Document Details */}
+          <div className="space-y-4">
+            <h3 className="text-lg font-medium text-gray-900 flex items-center gap-2">
+              <FileText className="h-4 w-4" />
+              Document Details
+            </h3>
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="requestId">Related Request ID</Label>
-                <Input
-                  id="requestId"
-                  value={formData.requestId}
-                  onChange={(e) => setFormData((prev) => ({ ...prev, requestId: e.target.value }))}
-                  placeholder="REQ-001 (optional)"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="priority">Priority Level</Label>
-                <Select
-                  value={formData.priority}
-                  onValueChange={(value) => setFormData((prev) => ({ ...prev, priority: value }))}
-                >
+                <Label htmlFor="documentType">Document Type *</Label>
+                <Select value={documentType} onValueChange={(value) => setDocumentType(value as DocumentType)}>
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {priorityLevels.map((priority) => (
-                      <SelectItem key={priority.value} value={priority.value}>
+                    {documentTypeOptions.map((type) => (
+                      <SelectItem key={type.value} value={type.value}>
+                        {type.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="priority">Priority Level *</Label>
+                <Select value={priority} onValueChange={(value) => setPriority(value as DocumentRequestPriority)}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {priorityLevels.map((level) => (
+                      <SelectItem key={level.value} value={level.value}>
                         <div className="flex items-center gap-2">
-                          <Badge className={`${priority.color} text-xs`}>{priority.label}</Badge>
+                          <Badge className={`${level.color} text-xs`}>{level.label}</Badge>
                         </div>
                       </SelectItem>
                     ))}
@@ -165,136 +336,79 @@ export function NewDocumentRequestModal({ children }: NewDocumentRequestModalPro
             </div>
           </div>
 
-          {/* Document Selection */}
-          <div className="space-y-4">
-            <h3 className="text-lg font-medium text-gray-900 flex items-center gap-2">
-              <FileText className="h-4 w-4" />
-              Required Documents
-            </h3>
-
-            {/* Document Categories */}
-            <div className="space-y-4">
-              {["Identification", "Financial", "Medical", "Property", "Insurance"].map((category) => (
-                <div key={category} className="space-y-2">
-                  <h4 className="font-medium text-gray-700">{category}</h4>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                    {documentTypes
-                      .filter((doc) => doc.category === category)
-                      .map((doc) => (
-                        <div key={doc.id} className="flex items-center space-x-2">
-                          <Checkbox
-                            id={doc.id}
-                            checked={selectedDocuments.includes(doc.id)}
-                            onCheckedChange={() => handleDocumentToggle(doc.id)}
-                          />
-                          <Label htmlFor={doc.id} className="text-sm font-normal cursor-pointer">
-                            {doc.label}
-                          </Label>
-                        </div>
-                      ))}
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            {/* Custom Document */}
-            <div className="space-y-2">
-              <Label htmlFor="customDocument">Custom Document</Label>
-              <div className="flex gap-2">
-                <Input
-                  id="customDocument"
-                  value={customDocument}
-                  onChange={(e) => setCustomDocument(e.target.value)}
-                  placeholder="Enter custom document name"
-                />
-                <Button type="button" onClick={handleAddCustomDocument} variant="outline">
-                  <Plus className="h-4 w-4" />
-                </Button>
-              </div>
-            </div>
-
-            {/* Selected Documents */}
-            {selectedDocuments.length > 0 && (
-              <div className="space-y-2">
-                <Label>Selected Documents ({selectedDocuments.length})</Label>
-                <div className="flex flex-wrap gap-2">
-                  {selectedDocuments.map((docId) => (
-                    <Badge key={docId} variant="outline" className="flex items-center gap-1">
-                      {getDocumentLabel(docId)}
-                      <button
-                        type="button"
-                        onClick={() => handleRemoveDocument(docId)}
-                        className="ml-1 hover:text-red-600"
-                      >
-                        <X className="h-3 w-3" />
-                      </button>
-                    </Badge>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-
           {/* Request Details */}
           <div className="space-y-4">
             <h3 className="text-lg font-medium text-gray-900 flex items-center gap-2">
               <Calendar className="h-4 w-4" />
               Request Details
             </h3>
+
             <div className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="dueDate">Due Date</Label>
+                <Label htmlFor="dueDate">Due Date (Optional)</Label>
                 <Input
                   id="dueDate"
                   type="date"
-                  value={formData.dueDate}
-                  onChange={(e) => setFormData((prev) => ({ ...prev, dueDate: e.target.value }))}
+                  value={dueDate}
+                  onChange={(e) => setDueDate(e.target.value)}
+                  min={new Date().toISOString().split('T')[0]}
                 />
               </div>
+
               <div className="space-y-2">
-                <Label htmlFor="notes">Additional Notes</Label>
+                <Label htmlFor="notes">Additional Notes (Optional)</Label>
                 <Textarea
                   id="notes"
-                  value={formData.notes}
-                  onChange={(e) => setFormData((prev) => ({ ...prev, notes: e.target.value }))}
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
                   placeholder="Add any specific instructions or requirements..."
                   rows={3}
                 />
               </div>
+
               <div className="flex items-center space-x-2">
                 <Checkbox
                   id="sendEmail"
-                  checked={formData.sendEmail}
-                  onCheckedChange={(checked) => setFormData((prev) => ({ ...prev, sendEmail: checked as boolean }))}
+                  checked={sendEmail}
+                  onCheckedChange={(checked) => setSendEmail(checked as boolean)}
                 />
                 <Label htmlFor="sendEmail" className="text-sm font-normal cursor-pointer flex items-center gap-2">
                   <Mail className="h-4 w-4" />
-                  Send email notification to applicant
+                  Send email notification to client
                 </Label>
               </div>
             </div>
           </div>
 
           {/* Warning */}
-          {selectedDocuments.length === 0 && (
+          {!clientId && (
             <div className="flex items-center gap-2 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
               <AlertCircle className="h-4 w-4 text-yellow-600" />
-              <span className="text-sm text-yellow-800">Please select at least one document to request.</span>
+              <span className="text-sm text-yellow-800">Please select a client to continue.</span>
             </div>
           )}
 
           {/* Actions */}
           <div className="flex justify-end gap-3 pt-4 border-t">
-            <Button type="button" variant="outline" onClick={() => setOpen(false)}>
+            <Button type="button" variant="outline" onClick={() => setOpen(false)} disabled={creating}>
               Cancel
             </Button>
             <Button
               type="submit"
               className="bg-blue-600 hover:bg-blue-700 text-white"
-              disabled={selectedDocuments.length === 0 || !formData.applicantName || !formData.applicantEmail}
+              disabled={!clientId || !documentType || creating}
             >
-              <Mail className="h-4 w-4 mr-2" />
-              Create Request
+              {creating ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Creating...
+                </>
+              ) : (
+                <>
+                  <Mail className="h-4 w-4 mr-2" />
+                  Create Request
+                </>
+              )}
             </Button>
           </div>
         </form>

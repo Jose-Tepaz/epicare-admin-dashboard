@@ -1,40 +1,45 @@
+"use client"
+
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { FileText, Upload, Download, AlertTriangle } from "lucide-react"
+import { FileText, Upload, Download, AlertTriangle, Loader2, CheckCircle } from "lucide-react"
+import { useDocumentStats } from "@/lib/hooks/use-documents"
 
 export function DocumentsStats() {
-  const stats = [
+  const { stats, loading } = useDocumentStats()
+
+  if (loading) {
+    return (
+      <div className="flex justify-center py-8">
+        <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
+      </div>
+    )
+  }
+
+  const statsConfig = [
     {
-      title: "Pending Documents",
-      value: "32",
-      change: "+5%",
-      changeType: "increase" as const,
+      title: "Total Documents",
+      value: stats?.total.toString() || "0",
       icon: FileText,
       color: "text-blue-600",
       bgColor: "bg-blue-50",
     },
     {
-      title: "Uploaded Today",
-      value: "14",
-      change: "+12%",
-      changeType: "increase" as const,
-      icon: Upload,
+      title: "Under Review",
+      value: stats?.under_review.toString() || "0",
+      icon: AlertTriangle,
+      color: "text-yellow-600",
+      bgColor: "bg-yellow-50",
+    },
+    {
+      title: "Approved",
+      value: stats?.approved.toString() || "0",
+      icon: CheckCircle,
       color: "text-green-600",
       bgColor: "bg-green-50",
     },
     {
-      title: "Downloaded",
-      value: "89",
-      change: "+8%",
-      changeType: "increase" as const,
-      icon: Download,
-      color: "text-purple-600",
-      bgColor: "bg-purple-50",
-    },
-    {
-      title: "Missing Documents",
-      value: "12",
-      change: "-2%",
-      changeType: "decrease" as const,
+      title: "Expired",
+      value: stats?.expired.toString() || "0",
       icon: AlertTriangle,
       color: "text-red-600",
       bgColor: "bg-red-50",
@@ -43,7 +48,7 @@ export function DocumentsStats() {
 
   return (
     <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-      {stats.map((stat) => {
+      {statsConfig.map((stat) => {
         const Icon = stat.icon
         return (
           <Card key={stat.title}>
@@ -55,9 +60,6 @@ export function DocumentsStats() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold text-gray-900">{stat.value}</div>
-              <p className={`text-xs ${stat.changeType === "increase" ? "text-green-600" : "text-red-600"}`}>
-                {stat.change} from last week
-              </p>
             </CardContent>
           </Card>
         )

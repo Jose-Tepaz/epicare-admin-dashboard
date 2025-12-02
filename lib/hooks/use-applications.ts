@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { ApplicationFilters, PaginationParams, PaginatedResponse } from '@/lib/types/admin'
+import { useAdminAuth } from '@/contexts/admin-auth-context'
 import { toast } from 'sonner'
 
 export interface ApplicationWithRelations {
@@ -25,6 +26,7 @@ export function useApplications(
   filters: ApplicationFilters = {},
   pagination: PaginationParams = { page: 1, pageSize: 25 }
 ) {
+  const { user, loading: authLoading } = useAdminAuth()
   const [applications, setApplications] = useState<ApplicationWithRelations[]>([])
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(true)
@@ -36,6 +38,11 @@ export function useApplications(
   }, [filters.status])
 
   const fetchApplications = useCallback(async () => {
+    // Esperar a que la autenticación esté lista
+    if (authLoading || !user) {
+      return
+    }
+
     try {
       setLoading(true)
       setError(null)
@@ -102,6 +109,8 @@ export function useApplications(
       setLoading(false)
     }
   }, [
+    authLoading,
+    user,
     statusKey,
     filters.search,
     filters.startDate,

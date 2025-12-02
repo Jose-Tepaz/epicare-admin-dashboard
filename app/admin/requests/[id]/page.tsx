@@ -19,6 +19,7 @@ import {
   MetadataCard,
   statusConfig,
 } from "@/components/request-details"
+import { ActionButtonsCard } from "@/components/request-details/action-buttons-card"
 
 export default function RequestDetailsPage() {
   const params = useParams()
@@ -111,6 +112,11 @@ export default function RequestDetailsPage() {
 
           {/* Sidebar */}
           <div className="space-y-6">
+            <ActionButtonsCard
+              application={application}
+              onSuccess={refetch}
+            />
+            
             <StatusUpdateCard
               applicationId={application.id}
               currentStatus={application.status}

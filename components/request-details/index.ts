@@ -10,7 +10,9 @@ export { BeneficiariesCard } from './beneficiaries-card'
 export { StatusUpdateCard } from './status-update-card'
 export { SubmissionResultsCard } from './submission-results-card'
 export { MetadataCard } from './metadata-card'
+export { ActionButtonsCard } from './action-buttons-card'
 
 export { statusConfig, relationshipLabels } from './constants'
 export type * from './types'
+
 
