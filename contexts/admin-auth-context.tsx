@@ -66,9 +66,11 @@ export function AdminAuthProvider({ children }: { children: React.ReactNode }) {
     fetchingContextRef.current = true
     console.log('🔍 AdminAuthContext: Fetching user context for', userId)
     
-    // Timeout específico para esta función (5 segundos)
+    // Timeout específico para esta función (3 segundos - más agresivo)
+    let timeoutFired = false
     const functionTimeout = setTimeout(() => {
-      console.warn('⚠️ fetchUserContext timed out, using default values')
+      timeoutFired = true
+      console.warn('⚠️ fetchUserContext timed out after 3s, using default values')
       // Establecer valores por defecto para que la UI no se bloquee
       setUserRoles([{
         id: 'client',
@@ -79,25 +81,38 @@ export function AdminAuthProvider({ children }: { children: React.ReactNode }) {
       setAssignedAgentId(null)
       setAgentId(null)
       fetchingContextRef.current = false
-    }, 5000)
+      // Asegurar que loading se ponga en false
+      setLoading(false)
+    }, 3000)
     
     try {
-      // 1. Obtener datos básicos del usuario
-      const { data: userData, error: userError } = await supabase
-        .from('users')
-        .select(`
-          role,
-          scope,
-          assigned_to_agent_id,
-          agent_id
-        `)
-        .eq('id', userId)
-        .single()
+      // 1. Obtener datos básicos del usuario (simplificado para ser más robusto)
+      console.log('📡 Starting Supabase query for user:', userId)
+      const queryStartTime = Date.now()
+      
+      const { data: userData, error: userError } = await Promise.race([
+        supabase
+          .from('users')
+          .select('role, scope, assigned_to_agent_id, agent_id')
+          .eq('id', userId)
+          .single(),
+        new Promise<{ data: null; error: { message: string } }>((resolve) => 
+          setTimeout(() => resolve({ data: null, error: { message: 'Query timeout' } }), 3000)
+        )
+      ]) as any
+
+      const queryDuration = Date.now() - queryStartTime
+      console.log(`⏱️ Query completed in ${queryDuration}ms`)
 
       clearTimeout(functionTimeout)
 
-      if (userError) {
-        console.error('❌ AdminAuthContext: Error fetching user data:', userError)
+      if (timeoutFired) {
+        console.log('⏸️ Timeout already fired, skipping result')
+        return
+      }
+
+      if (userError || !userData) {
+        console.error('❌ AdminAuthContext: Error fetching user data:', userError || 'No data returned')
         // Establecer valores por defecto en caso de error
         setUserRoles([{
           id: 'client',
@@ -107,6 +122,7 @@ export function AdminAuthProvider({ children }: { children: React.ReactNode }) {
         setUserScope('global')
         setAssignedAgentId(null)
         setAgentId(null)
+        setLoading(false)
         return
       }
 
@@ -166,6 +182,11 @@ export function AdminAuthProvider({ children }: { children: React.ReactNode }) {
       }
 
       lastFetchedUserIdRef.current = userId
+      
+      // Asegurar que loading se ponga en false después de éxito
+      if (!timeoutFired) {
+        setLoading(false)
+      }
     } catch (error) {
       clearTimeout(functionTimeout)
       console.error('❌ AdminAuthContext: Unexpected error fetching context:', error)
@@ -178,6 +199,7 @@ export function AdminAuthProvider({ children }: { children: React.ReactNode }) {
       setUserScope('global')
       setAssignedAgentId(null)
       setAgentId(null)
+      setLoading(false)
     } finally {
       fetchingContextRef.current = false
     }
@@ -227,7 +249,39 @@ export function AdminAuthProvider({ children }: { children: React.ReactNode }) {
           if (session?.user) {
             console.log('✅ Session found, user:', session.user.id)
             setUser(session.user)
-            await fetchUserContext(session.user.id)
+            try {
+              await fetchUserContext(session.user.id)
+              // Asegurar que loading se ponga en false después del fetch
+              setLoading(false)
+            } catch (err) {
+              console.error('Error in fetchUserContext during init:', err)
+              // Establecer valores por defecto en caso de error
+              setUserRoles([{
+                id: 'client',
+                name: 'client' as any,
+                description: null
+              }])
+              setUserScope('global')
+              setAssignedAgentId(null)
+              setAgentId(null)
+              setLoading(false)
+            }
+            
+            // Fallback adicional: si después de 4 segundos aún no hay roles, establecer valores por defecto
+            setTimeout(() => {
+              if (mounted && userRoles.length === 0 && session?.user) {
+                console.warn('⚠️ No roles after 4 seconds in initAuth, setting defaults')
+                setUserRoles([{
+                  id: 'client',
+                  name: 'client' as any,
+                  description: null
+                }])
+                setUserScope('global')
+                setAssignedAgentId(null)
+                setAgentId(null)
+                setLoading(false)
+              }
+            }, 4000)
           } else if (!pathname?.includes('/login') && !pathname?.includes('/auth/')) {
             // Solo redirigir si no estamos ya en login o auth pages
             console.log('❌ No session found, redirecting to login')
@@ -268,8 +322,22 @@ export function AdminAuthProvider({ children }: { children: React.ReactNode }) {
             if (needsContextRefresh) {
               try {
                 await fetchUserContext(session.user.id)
+                // Asegurar que loading se ponga en false después del fetch
+                setLoading(false)
               } catch (err) {
                 console.error('Error fetching user context on auth change:', err)
+                // Establecer valores por defecto en caso de error
+                if (userRoles.length === 0) {
+                  setUserRoles([{
+                    id: 'client',
+                    name: 'client' as any,
+                    description: null
+                  }])
+                  setUserScope('global')
+                  setAssignedAgentId(null)
+                  setAgentId(null)
+                }
+                setLoading(false)
               }
             } else {
               // Si ya tenemos los datos, solo asegurar que loading sea false
@@ -283,6 +351,22 @@ export function AdminAuthProvider({ children }: { children: React.ReactNode }) {
             // Para otros eventos, solo asegurar que loading sea false
             setLoading(false)
           }
+          
+          // Fallback adicional: si después de 2 segundos aún no hay roles, establecer valores por defecto
+          setTimeout(() => {
+            if (mounted && userRoles.length === 0 && session?.user) {
+              console.warn('⚠️ No roles after 2 seconds, setting defaults')
+              setUserRoles([{
+                id: 'client',
+                name: 'client' as any,
+                description: null
+              }])
+              setUserScope('global')
+              setAssignedAgentId(null)
+              setAgentId(null)
+              setLoading(false)
+            }
+          }, 2000)
         } else {
           setUser(null)
           setUserRoles([])
