@@ -66,6 +66,21 @@ export function AdminAuthProvider({ children }: { children: React.ReactNode }) {
     fetchingContextRef.current = true
     console.log('🔍 AdminAuthContext: Fetching user context for', userId)
     
+    // Timeout específico para esta función (5 segundos)
+    const functionTimeout = setTimeout(() => {
+      console.warn('⚠️ fetchUserContext timed out, using default values')
+      // Establecer valores por defecto para que la UI no se bloquee
+      setUserRoles([{
+        id: 'client',
+        name: 'client' as any,
+        description: null
+      }])
+      setUserScope('global')
+      setAssignedAgentId(null)
+      setAgentId(null)
+      fetchingContextRef.current = false
+    }, 5000)
+    
     try {
       // 1. Obtener datos básicos del usuario
       const { data: userData, error: userError } = await supabase
@@ -79,8 +94,19 @@ export function AdminAuthProvider({ children }: { children: React.ReactNode }) {
         .eq('id', userId)
         .single()
 
+      clearTimeout(functionTimeout)
+
       if (userError) {
         console.error('❌ AdminAuthContext: Error fetching user data:', userError)
+        // Establecer valores por defecto en caso de error
+        setUserRoles([{
+          id: 'client',
+          name: 'client' as any,
+          description: null
+        }])
+        setUserScope('global')
+        setAssignedAgentId(null)
+        setAgentId(null)
         return
       }
 
@@ -103,14 +129,23 @@ export function AdminAuthProvider({ children }: { children: React.ReactNode }) {
         setAssignedAgentId(null)
       }
 
-      // 2. Obtener agent_id si es necesario
+      // 2. Obtener agent_id si es necesario (con timeout más corto)
       if (userData.role === 'agent') {
         try {
-          const { data: agentData, error: agentError } = await supabase
+          const agentPromise = supabase
             .from('agents')
             .select('id')
             .eq('user_id', userId)
             .maybeSingle()
+          
+          // Timeout de 3 segundos para la query de agent
+          const agentTimeout = setTimeout(() => {
+            console.warn('⚠️ Agent query timed out, setting agentId to null')
+            setAgentId(null)
+          }, 3000)
+          
+          const { data: agentData, error: agentError } = await agentPromise
+          clearTimeout(agentTimeout)
           
           if (agentError) {
             if (agentError.code !== 'PGRST116') {
@@ -132,7 +167,17 @@ export function AdminAuthProvider({ children }: { children: React.ReactNode }) {
 
       lastFetchedUserIdRef.current = userId
     } catch (error) {
+      clearTimeout(functionTimeout)
       console.error('❌ AdminAuthContext: Unexpected error fetching context:', error)
+      // Establecer valores por defecto en caso de error
+      setUserRoles([{
+        id: 'client',
+        name: 'client' as any,
+        description: null
+      }])
+      setUserScope('global')
+      setAssignedAgentId(null)
+      setAgentId(null)
     } finally {
       fetchingContextRef.current = false
     }
@@ -149,13 +194,24 @@ export function AdminAuthProvider({ children }: { children: React.ReactNode }) {
     let mounted = true
     console.log('🔄 AdminAuthProvider useEffect running')
 
-    // Timeout de seguridad para evitar carga infinita (aumentado a 15 segundos)
+    // Timeout de seguridad para evitar carga infinita (10 segundos)
     const safetyTimeout = setTimeout(() => {
       if (mounted && loading) {
-        console.warn('⚠️ Auth loading timed out, forcing completion')
+        console.warn('⚠️ Auth loading timed out, forcing completion with default values')
+        // Establecer valores por defecto si no hay roles establecidos
+        if (userRoles.length === 0 && user) {
+          setUserRoles([{
+            id: 'client',
+            name: 'client' as any,
+            description: null
+          }])
+          setUserScope('global')
+          setAssignedAgentId(null)
+          setAgentId(null)
+        }
         setLoading(false)
       }
-    }, 15000) // 15 segundos
+    }, 10000) // 10 segundos
 
     const initAuth = async () => {
       try {
