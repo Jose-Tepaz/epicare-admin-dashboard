@@ -13,7 +13,6 @@ const navigationItems = [
   { name: "Applications", href: "/applications", active: false },
   { name: "My policies", href: "/policies", active: false },
   { name: "Family", href: "/family", active: false },
-  { name: "Profile", href: "/profile", active: false },
   { name: "Support", href: "/support", active: false },
 ]
 

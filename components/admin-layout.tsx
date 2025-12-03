@@ -9,6 +9,7 @@ import { Menu, X, Settings, Users, FileText, ClipboardList, BarChart3, Bell, Log
 import Link from "next/link"
 import { useAdminAuth } from "@/contexts/admin-auth-context"
 import { Badge } from "@/components/ui/badge"
+import { NotificationsDropdown } from "@/components/notifications-dropdown"
 
 const adminNavigationItems = [
   { name: "Dashboard", href: "/admin", icon: BarChart3, active: false },
@@ -145,10 +146,7 @@ export function AdminLayout({ children, currentPage = "Dashboard" }: AdminLayout
           </Button>
           <span className="font-medium text-gray-900">Admin Panel</span>
           <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" className="relative bg-transparent">
-              <Bell className="h-4 w-4" />
-              <span className="absolute -top-1 -right-1 h-3 w-3 bg-red-500 rounded-full text-xs"></span>
-            </Button>
+            <NotificationsDropdown />
           </div>
         </div>
 
@@ -159,10 +157,7 @@ export function AdminLayout({ children, currentPage = "Dashboard" }: AdminLayout
             <span className="text-sm text-gray-500">Internal Management System</span>
           </div>
           <div className="flex items-center gap-3">
-            <Button variant="outline" size="sm" className="relative bg-transparent">
-              <Bell className="h-4 w-4" />
-              <span className="absolute -top-1 -right-1 h-3 w-3 bg-red-500 rounded-full"></span>
-            </Button>
+            <NotificationsDropdown />
             {user && (
               <div className="flex items-center gap-2">
                 <div className="w-8 h-8 bg-orange-500 rounded-full flex items-center justify-center">

@@ -48,6 +48,44 @@ export interface Application {
   } | null
 }
 
+// ============================================
+// TIPOS PARA NOTIFICACIONES
+// ============================================
+
+/**
+ * Tipos de notificaciones disponibles
+ */
+export type NotificationType = 'application' | 'document' | 'support'
+
+/**
+ * Metadata adicional para notificaciones
+ */
+export interface NotificationMetadata {
+  application_id?: string
+  document_id?: string
+  document_request_id?: string
+  ticket_id?: string
+  ticket_message_id?: string
+  status?: string
+  previous_status?: string
+}
+
+/**
+ * Notificación del sistema
+ */
+export interface Notification {
+  id: string
+  user_id: string
+  type: NotificationType
+  title: string
+  message: string
+  link_url: string | null
+  metadata: NotificationMetadata | null
+  is_read: boolean
+  read_at: string | null
+  created_at: string
+}
+
 export interface AdminUser {
   id: string
   email: string
