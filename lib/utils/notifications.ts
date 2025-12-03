@@ -32,7 +32,6 @@ async function createNotification(
     }
   } catch (err) {
     console.error(`Failed to create notification for user ${userId}:`, err)
-    // No lanzar error para no interrumpir el flujo principal
   }
 }
 

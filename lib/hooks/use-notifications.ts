@@ -54,8 +54,6 @@ export function useNotifications(): UseNotificationsReturn {
         setError(null)
       }
 
-      // Filtrar por user_id del usuario actual (el admin/agent/support_staff)
-      // Las notificaciones del admin se crean con el user_id del receptor
       const { data, error: fetchError } = await supabase
         .from('notifications')
         .select('*')
