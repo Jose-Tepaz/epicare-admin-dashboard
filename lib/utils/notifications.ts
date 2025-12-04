@@ -14,9 +14,15 @@ async function createNotification(
   metadata: NotificationMetadata | null = null
 ): Promise<void> {
   try {
+    console.log(`[Notification] Creating ${type} notification for user ${userId}:`, {
+      title,
+      message,
+      linkUrl,
+    })
+    
     const supabase = createAdminClient()
 
-    const { error } = await supabase.from('notifications').insert({
+    const { data, error } = await supabase.from('notifications').insert({
       user_id: userId,
       type,
       title,
@@ -24,14 +30,16 @@ async function createNotification(
       link_url: linkUrl,
       metadata,
       is_read: false,
-    })
+    }).select()
 
     if (error) {
-      console.error(`Error creating ${type} notification for user ${userId}:`, error)
+      console.error(`[Notification] Error creating ${type} notification for user ${userId}:`, error)
       throw error
     }
+    
+    console.log(`[Notification] Successfully created notification:`, data)
   } catch (err) {
-    console.error(`Failed to create notification for user ${userId}:`, err)
+    console.error(`[Notification] Failed to create notification for user ${userId}:`, err)
   }
 }
 
@@ -45,6 +53,8 @@ async function getNotificationRecipients(clientId: string): Promise<{
   adminIds: string[]
   supportStaffIds: string[]
 }> {
+  console.log(`[Recipients] Getting notification recipients for client: ${clientId}`)
+  
   const supabase = createAdminClient()
 
   // Obtener información del cliente
@@ -55,7 +65,7 @@ async function getNotificationRecipients(clientId: string): Promise<{
     .single()
 
   if (clientError || !client) {
-    console.error('Error fetching client:', clientError)
+    console.error('[Recipients] Error fetching client:', clientError)
     return {
       agentId: null,
       superAdminIds: [],
@@ -64,13 +74,17 @@ async function getNotificationRecipients(clientId: string): Promise<{
     }
   }
 
+  console.log(`[Recipients] Client agent_id: ${client.agent_id}`)
+
   const agentId = client.agent_id
 
   // Obtener todos los super_admin y admin
-  const { data: admins } = await supabase
+  const { data: admins, error: adminsError } = await supabase
     .from('users')
-    .select('id, role')
+    .select('id, role, email')
     .in('role', ['super_admin', 'admin'])
+
+  console.log('[Recipients] Found admins:', admins, 'Error:', adminsError)
 
   const superAdminIds: string[] = []
   const adminIds: string[] = []
@@ -84,10 +98,12 @@ async function getNotificationRecipients(clientId: string): Promise<{
   })
 
   // Obtener support_staff según scope
-  const { data: supportStaff } = await supabase
+  const { data: supportStaff, error: supportError } = await supabase
     .from('users')
     .select('id, scope, assigned_to_agent_id')
     .eq('role', 'support_staff')
+
+  console.log('[Recipients] Found support_staff:', supportStaff, 'Error:', supportError)
 
   const supportStaffIds: string[] = []
 
@@ -102,12 +118,16 @@ async function getNotificationRecipients(clientId: string): Promise<{
     }
   })
 
-  return {
+  const result = {
     agentId,
     superAdminIds,
     adminIds,
     supportStaffIds,
   }
+  
+  console.log('[Recipients] Final recipients:', result)
+
+  return result
 }
 
 /**
