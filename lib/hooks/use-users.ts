@@ -14,6 +14,7 @@ export interface UserWithStats {
   phone: string | null
   created_at: string
   profile_completed: boolean | null
+  password_set: boolean | null
   roles: Array<{
     id: string
     name: string
@@ -61,7 +62,8 @@ export function useUsers(
           phone,
           role,
           created_at,
-          profile_completed
+          profile_completed,
+          password_set
         `, { count: 'exact' })
 
       // Aplicar filtros de fecha

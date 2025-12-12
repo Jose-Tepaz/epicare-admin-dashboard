@@ -12,10 +12,12 @@ function InviteCallback() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const type = searchParams.get('type') || 'invite'
+  const next = searchParams.get('next') || '/admin/set-password'
 
   useEffect(() => {
     console.log('🔗 invite-callback page iniciado')
     console.log('🔗 Type:', type)
+    console.log('🔗 Next:', next)
     console.log('🔗 URL completa:', window.location.href)
     console.log('🔗 Hash:', window.location.hash ? window.location.hash.substring(0, 100) + '...' : 'sin hash')
 
@@ -26,13 +28,15 @@ function InviteCallback() {
     if (hash && hash.includes('access_token')) {
       console.log('✅ Hash detectado, redirigiendo a set-password con hash preservado')
       // Usar window.location.href para preservar el hash completamente
-      window.location.href = `/admin/set-password${hash}`
+      const targetPath = next.startsWith('/') ? next : `/${next}`
+      window.location.href = `${targetPath}${hash}`
     } else {
       console.log('⚠️ No se encontró hash, redirigiendo a set-password sin hash')
       // Si no hay hash, redirigir de todas formas (puede que ya se haya procesado)
-      router.push('/admin/set-password')
+      const targetPath = next.startsWith('/') ? next : `/${next}`
+      router.push(targetPath)
     }
-  }, [router, type])
+  }, [router, type, next])
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50">

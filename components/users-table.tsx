@@ -62,7 +62,7 @@ export function UsersTable() {
     { page, pageSize: 25 }
   )
 
-  const { isSuperAdmin, isAdmin, user: currentUser } = useAdminAuth()
+  const { isSuperAdmin, isAdmin, isAgent, user: currentUser } = useAdminAuth()
   const { deleteUser, deleting } = useDeleteUser()
   const { resendInvite, resending } = useResendInvite()
 
@@ -124,10 +124,10 @@ export function UsersTable() {
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <CardTitle className="text-xl font-semibold">Usuarios</CardTitle>
           <div className="flex flex-col sm:flex-row gap-2">
-            {(isAdmin || isSuperAdmin) && (
+            {(isAdmin || isSuperAdmin || isAgent) && (
               <Button onClick={() => setModalOpen(true)} className="bg-blue-600 hover:bg-blue-700">
                 <UserPlus className="h-4 w-4 mr-2" />
-                Nuevo Usuario
+                {isAgent ? "Nuevo Cliente/Staff" : "Nuevo Usuario"}
               </Button>
             )}
             <div className="relative">
@@ -228,8 +228,8 @@ export function UsersTable() {
                             ) : (
                               <Badge variant="outline" className="text-xs">user</Badge>
                             )}
-                            {/* Badge de estado del perfil */}
-                            {!user.profile_completed && (
+                            {/* Badge de estado de invitación */}
+                            {!user.password_set && (
                               <Badge variant="outline" className="text-xs text-amber-600 border-amber-300 bg-amber-50">
                                 Pendiente
                               </Badge>
@@ -254,8 +254,8 @@ export function UsersTable() {
                                 Ver
                               </Button>
                             </Link>
-                            {/* Botón para reenviar invitación - solo si el perfil no está completado */}
-                            {(isAdmin || isSuperAdmin) && !user.profile_completed && (
+                            {/* Botón para reenviar invitación - solo si el usuario no ha establecido contraseña */}
+                            {(isAdmin || isSuperAdmin) && !user.password_set && (
                               <Button 
                                 variant="ghost" 
                                 size="sm"

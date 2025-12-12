@@ -140,6 +140,7 @@ export interface User {
   coverage_start_date?: string
   explore_completed?: boolean
   profile_completed?: boolean
+  password_set?: boolean
   created_at: string
   updated_at: string
 }

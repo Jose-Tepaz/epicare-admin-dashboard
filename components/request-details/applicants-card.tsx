@@ -88,9 +88,35 @@ export function ApplicantsCard({ applicants, permissions }: ApplicantsCardProps)
                   <div>
                     <span className="text-gray-500">Teléfono:</span>
                     <span className="ml-2 font-medium">
-                      {typeof applicant.phone_numbers === 'string' 
-                        ? applicant.phone_numbers 
-                        : JSON.stringify(applicant.phone_numbers)}
+                      {(() => {
+                        try {
+                          // Si es string, intentar parsearlo como JSON
+                          const phoneData = typeof applicant.phone_numbers === 'string' 
+                            ? JSON.parse(applicant.phone_numbers)
+                            : applicant.phone_numbers
+                          
+                          // Si es un array, extraer los números
+                          if (Array.isArray(phoneData)) {
+                            return phoneData
+                              .map((phone: any) => phone.phoneNumber || phone)
+                              .filter(Boolean)
+                              .join(', ') || 'N/A'
+                          }
+                          
+                          // Si es un objeto con phoneNumber
+                          if (phoneData && typeof phoneData === 'object' && phoneData.phoneNumber) {
+                            return phoneData.phoneNumber
+                          }
+                          
+                          // Si es string simple
+                          return phoneData
+                        } catch {
+                          // Si falla el parse, mostrar como string
+                          return typeof applicant.phone_numbers === 'string' 
+                            ? applicant.phone_numbers 
+                            : 'N/A'
+                        }
+                      })()}
                     </span>
                   </div>
                 )}

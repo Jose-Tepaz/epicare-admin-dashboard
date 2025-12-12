@@ -65,17 +65,18 @@ export async function POST(request: NextRequest) {
     const roleName = targetUserData.role
 
     // Determinar la URL de redirección basada en el rol
-    // Redirigir DIRECTAMENTE a set-password (sin pasar por /auth/callback)
-    // Esto preserva el hash fragment con los tokens
+    // IMPORTANTE: Usar solo la URL base del callback (sin query params)
     let redirectTo: string
     if (roleName === 'client') {
       // Clientes van al dashboard de usuario
-      const userDashboardUrl = process.env.NEXT_PUBLIC_DASHBOARD_URL || 'http://localhost:3001'
-      redirectTo = `${userDashboardUrl}/set-password`
+      let userDashboardUrl = process.env.NEXT_PUBLIC_DASHBOARD_URL || 'http://localhost:3001'
+      userDashboardUrl = userDashboardUrl.replace(/\/$/, '')
+      redirectTo = `${userDashboardUrl}/auth/callback`
     } else {
       // Otros roles van al dashboard de administración
-      const adminDashboardUrl = process.env.NEXT_PUBLIC_ADMIN_DASHBOARD_URL || request.headers.get('origin') || 'http://localhost:3002'
-      redirectTo = `${adminDashboardUrl}/admin/set-password`
+      let adminDashboardUrl = process.env.NEXT_PUBLIC_ADMIN_DASHBOARD_URL || 'http://localhost:3002'
+      adminDashboardUrl = adminDashboardUrl.replace(/\/$/, '')
+      redirectTo = `${adminDashboardUrl}/auth/callback`
     }
 
     console.log('📧 Reenviando invitación con redirectTo:', redirectTo)

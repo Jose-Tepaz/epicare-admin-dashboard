@@ -64,6 +64,13 @@ export interface CoverageData {
   effective_date: string
   monthly_premium: number
   payment_frequency: string
+  term?: number
+  number_of_terms?: number
+  termination_date?: string
+  is_automatic_loan_provision_opted_in?: boolean
+  riders?: any
+  discounts?: any
+  agent_number?: string
 }
 
 export interface BeneficiaryData {

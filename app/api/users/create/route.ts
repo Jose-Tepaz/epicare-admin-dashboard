@@ -12,28 +12,36 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
     }
 
-    // Verificar que el usuario tenga rol admin (usando users.role directamente)
-    const { data: userData, error: userError } = await supabase
+    // Usar adminClient para verificar el rol (bypasea RLS para evitar problemas)
+    const adminClient = createAdminClient()
+    const { data: userData, error: userError } = await adminClient
       .from('users')
-      .select('role')
+      .select('role, active_role')
       .eq('id', user.id)
       .single()
 
-    if (userError) {
+    if (userError || !userData) {
+      console.error('Error verificando rol:', userError)
       return NextResponse.json({ error: 'Error al verificar permisos' }, { status: 500 })
     }
 
-    const userRole = userData?.role || ''
+    // Usar active_role si existe (para role switching), sino usar role
+    const userRole = userData.active_role || userData.role || ''
     const isSuperAdmin = userRole === 'super_admin'
     const isAdmin = userRole === 'admin'
+    const isAgent = userRole === 'agent'
     
-    if (!isSuperAdmin && !isAdmin) {
-      return NextResponse.json({ error: 'No tienes permisos para crear usuarios' }, { status: 403 })
+    // Permitir a super_admin, admin y agent crear usuarios
+    if (!isSuperAdmin && !isAdmin && !isAgent) {
+      return NextResponse.json({ 
+        error: 'No tienes permisos para crear usuarios',
+        details: `Tu rol actual es: ${userRole}. Se requiere admin, super_admin o agent.`
+      }, { status: 403 })
     }
 
     // Obtener datos del body
     const body = await request.json()
-    const { email, first_name, last_name, phone, address, state, city, zipcode, role: targetRole } = body
+    const { email, first_name, last_name, phone, address, state, city, zipcode, role: targetRole, agent_profile_id } = body
 
     if (!email) {
       return NextResponse.json({ error: 'El email es requerido' }, { status: 400 })
@@ -53,8 +61,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Rol inválido' }, { status: 400 })
     }
 
-    // Crear usuario en auth.users usando el cliente admin con invitación por correo
-    const adminClient = createAdminClient()
+    // adminClient ya está creado arriba para verificar permisos
 
     // Solo super_admin puede asignar roles admin o super_admin
     if ((targetRole === 'admin' || targetRole === 'super_admin') && !isSuperAdmin) {
@@ -79,17 +86,18 @@ export async function POST(request: NextRequest) {
     }
 
     // Determinar la URL de redirección basada en el rol
-    // Redirigir DIRECTAMENTE a set-password (sin pasar por /auth/callback)
-    // Esto preserva el hash fragment con los tokens
+    // Usar solo la URL base del callback (sin query params)
     let redirectTo: string
     if (targetRole === 'client') {
       // Clientes van al dashboard de usuario
-      const userDashboardUrl = process.env.NEXT_PUBLIC_DASHBOARD_URL || 'http://localhost:3001'
-      redirectTo = `${userDashboardUrl}/set-password`
+      let userDashboardUrl = process.env.NEXT_PUBLIC_DASHBOARD_URL || 'http://localhost:3001'
+      userDashboardUrl = userDashboardUrl.replace(/\/$/, '') // Eliminar trailing slash
+      redirectTo = `${userDashboardUrl}/auth/callback`
     } else {
       // Otros roles van al dashboard de administración
-      const adminDashboardUrl = process.env.NEXT_PUBLIC_ADMIN_DASHBOARD_URL || request.headers.get('origin') || 'http://localhost:3002'
-      redirectTo = `${adminDashboardUrl}/admin/set-password`
+      let adminDashboardUrl = process.env.NEXT_PUBLIC_ADMIN_DASHBOARD_URL || request.headers.get('origin') || 'http://localhost:3002'
+      adminDashboardUrl = adminDashboardUrl.replace(/\/$/, '') // Eliminar trailing slash
+      redirectTo = `${adminDashboardUrl}/auth/callback`
     }
 
     console.log('📧 Invitando usuario con redirectTo:', redirectTo)
@@ -126,57 +134,82 @@ export async function POST(request: NextRequest) {
       .eq('id', authUser.user.id)
       .single()
 
-    // 🎯 RN-002: Determinar scope y assigned_to_agent_id para support_staff
+    // 🎯 Obtener agent_profile_id si el creador es agent
+    let creatorAgentProfileId = null
+    
+    if (isAgent) {
+      const { data: agentProfile, error: agentError } = await adminClient
+        .from('agent_profiles')
+        .select('id')
+        .eq('user_id', user.id)
+        .single()
+      
+      if (agentError || !agentProfile) {
+        console.error('Error obteniendo agent_profile_id del creador:', agentError)
+        return NextResponse.json({ 
+          error: 'No se pudo obtener tu perfil de agente. Contacta al administrador.' 
+        }, { status: 400 })
+      }
+      
+      creatorAgentProfileId = agentProfile.id
+      console.log(`👤 Agente creando usuario. Agent profile ID: ${creatorAgentProfileId}`)
+    }
+
+    // 🎯 Determinar scope para support_staff
     let scope = 'global'
-    let assignedToAgentId = null
 
     if (targetRole === 'support_staff') {
-      // Si el creador es agent → scope = 'agent_specific' y asignar a ese agent
-      if (userRole === 'agent') {
+      if (isAgent) {
+        // Si el creador es agent → scope = 'agent_specific'
+        // El support_staff usará agent_profile_id para vincularse (igual que los clientes)
         scope = 'agent_specific'
-        
-        // Buscar el agent_id del usuario creador
-        const { data: agentData, error: agentError } = await adminClient
-          .from('agents')
-          .select('id')
-          .eq('user_id', user.id)
-          .single()
-        
-        if (agentError || !agentData) {
-          console.error('Error obteniendo agent_id del creador:', agentError)
-          return NextResponse.json({ 
-            error: 'No se pudo obtener el agent_id. Asegúrate de que el usuario agent tenga un registro en la tabla agents.' 
-          }, { status: 400 })
-        }
-        
-        assignedToAgentId = agentData.id
-        console.log(`🎯 Support staff creado por agent → scope: agent_specific, assigned_to_agent_id: ${assignedToAgentId}`)
+        console.log(`🎯 Support staff creado por agent → scope: agent_specific`)
       } else {
         // Admin o super_admin → scope global
+        scope = 'global'
         console.log('🌍 Support staff creado por admin/super_admin → scope: global')
       }
     }
 
     // Crear o actualizar registro en public.users usando upsert
     // IMPORTANTE: Asignar el rol directamente en users.role
+    // NOTA: agent_profile_id se asigna a clientes Y support_staff para vincularlos al agente
+    const newUserData: any = {
+      id: authUser.user.id,
+      email,
+      first_name: first_name || null,
+      last_name: last_name || null,
+      phone: phone || null,
+      address: address || null,
+      state: state || null,
+      city: city || null,
+      zip_code: zipcode || null,
+      role: targetRole, // ✅ Asignar rol directamente según USER-ROLE.MD
+      scope, // ✅ Scope según creador (global o agent_specific)
+      created_by: user.id, // Para tracking y jerarquía
+      created_via: 'admin_dashboard',
+    }
+
+    // Asignar agent_profile_id si es un CLIENTE o SUPPORT_STAFF
+    if (targetRole === 'client' || targetRole === 'support_staff') {
+      if (isAgent && creatorAgentProfileId) {
+        // Si el creador es agent, asignar automáticamente su agent_profile_id
+        newUserData.agent_profile_id = creatorAgentProfileId
+        const userType = targetRole === 'client' ? 'Cliente' : 'Support Staff'
+        console.log(`✅ ${userType} asignado automáticamente a agente: ${creatorAgentProfileId}`)
+      } else if (agent_profile_id && targetRole === 'client') {
+        // Si admin/super_admin seleccionó manualmente un agente (solo para clientes)
+        newUserData.agent_profile_id = agent_profile_id
+        console.log(`✅ Cliente asignado manualmente a agente: ${agent_profile_id}`)
+      }
+      // Si es cliente y no se asignó, el trigger assign_default_agent se encargará
+    }
+
+    // Usar upsert porque inviteUserByEmail puede crear el usuario automáticamente
+    // El trigger está configurado para ejecutarse en INSERT y UPDATE
     const { error: profileError } = await adminClient
       .from('users')
-      .upsert({
-        id: authUser.user.id,
-        email,
-        first_name: first_name || null,
-        last_name: last_name || null,
-        phone: phone || null,
-        address: address || null,
-        state: state || null,
-        city: city || null,
-        zip_code: zipcode || null,
-        role: targetRole, // ✅ Asignar rol directamente según USER-ROLE.MD
-        scope, // ✅ RN-002: Scope según creador
-        assigned_to_agent_id: assignedToAgentId, // ✅ RN-002: Agent ID si scope es agent_specific
-        created_by: user.id, // Para tracking y jerarquía
-        created_via: 'admin_dashboard',
-      }, {
+      .upsert(newUserData, {
         onConflict: 'id'
       })
 

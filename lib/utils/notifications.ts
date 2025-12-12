@@ -74,9 +74,9 @@ async function getNotificationRecipients(clientId: string): Promise<{
     }
   }
 
-  console.log(`[Recipients] Client agent_id: ${client.agent_id}`)
+  console.log(`[Recipients] Client agent_profile_id: ${client.agent_profile_id}`)
 
-  const agentId = client.agent_id
+  const agentId = client.agent_profile_id
 
   // Obtener todos los super_admin y admin
   const { data: admins, error: adminsError } = await supabase

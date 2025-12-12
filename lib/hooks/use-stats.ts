@@ -29,26 +29,40 @@ export function useAdminStats() {
       const now = new Date()
       const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1)
 
-      // Construir filtros según rol y scope
-      // Las RLS policies ya filtran automáticamente, pero agregamos filtros explícitos para optimización
-      let agentFilter: any = {}
+      // Para agents: obtener sus registration IDs para filtrar applications
+      // La relación es: applications.agent_id → agent_insurance_registrations.id
+      let agentRegistrationIds: string[] = []
       
       if (isAgent && agentId) {
-        // Agent: solo sus applications
-        agentFilter = { agent_id: agentId }
+        const { data: registrations } = await supabase
+          .from('agent_insurance_registrations')
+          .select('id')
+          .eq('agent_profile_id', agentId)
+        
+        agentRegistrationIds = registrations?.map(r => r.id) || []
       } else if (isSupportStaff && userScope === 'agent_specific' && assignedAgentId) {
-        // Support staff con scope: solo del agent asignado
-        agentFilter = { agent_id: assignedAgentId }
+        const { data: registrations } = await supabase
+          .from('agent_insurance_registrations')
+          .select('id')
+          .eq('agent_profile_id', assignedAgentId)
+        
+        agentRegistrationIds = registrations?.map(r => r.id) || []
       }
 
-      // 1. Total de applications (filtradas por RLS + agentFilter)
+      // Función helper para agregar filtro de agent a queries de applications
+      const addAgentFilter = (query: any) => {
+        if (agentRegistrationIds.length > 0) {
+          return query.in('agent_id', agentRegistrationIds)
+        }
+        return query
+      }
+
+      // 1. Total de applications (filtradas por RLS + agent filter)
       let totalAppsQuery = supabase
         .from('applications')
         .select('*', { count: 'exact', head: true })
       
-      if (Object.keys(agentFilter).length > 0) {
-        totalAppsQuery = totalAppsQuery.match(agentFilter)
-      }
+      totalAppsQuery = addAgentFilter(totalAppsQuery)
       
       const { count: totalApplications, error: totalAppsError } = await totalAppsQuery
       if (totalAppsError) throw totalAppsError
@@ -58,9 +72,7 @@ export function useAdminStats() {
         .from('applications')
         .select('user_id')
       
-      if (Object.keys(agentFilter).length > 0) {
-        activeUsersQuery = activeUsersQuery.match(agentFilter)
-      }
+      activeUsersQuery = addAgentFilter(activeUsersQuery)
         
       const { data: activeUsersData, error: activeUsersError } = await activeUsersQuery
       if (activeUsersError) throw activeUsersError
@@ -74,23 +86,21 @@ export function useAdminStats() {
         .select('*', { count: 'exact', head: true })
         .gte('created_at', firstDayOfMonth.toISOString())
       
-      if (Object.keys(agentFilter).length > 0) {
-        monthAppsQuery = monthAppsQuery.match(agentFilter)
-      }
+      monthAppsQuery = addAgentFilter(monthAppsQuery)
 
       const { count: applicationsThisMonth, error: monthAppsError } = await monthAppsQuery
       if (monthAppsError) throw monthAppsError
 
-      // 4. Nuevos usuarios este mes (filtrados por agent_id si aplica)
+      // 4. Nuevos usuarios este mes (filtrados por agent_profile_id si aplica)
       let newUsersQuery = supabase
         .from('users')
         .select('*', { count: 'exact', head: true })
         .gte('created_at', firstDayOfMonth.toISOString())
       
       if (isAgent && agentId) {
-        newUsersQuery = newUsersQuery.eq('agent_id', agentId)
+        newUsersQuery = newUsersQuery.eq('agent_profile_id', agentId)
       } else if (isSupportStaff && userScope === 'agent_specific' && assignedAgentId) {
-        newUsersQuery = newUsersQuery.eq('agent_id', assignedAgentId)
+        newUsersQuery = newUsersQuery.eq('agent_profile_id', assignedAgentId)
       }
 
       const { count: newUsersThisMonth, error: newUsersError } = await newUsersQuery
@@ -102,9 +112,7 @@ export function useAdminStats() {
         .select('*', { count: 'exact', head: true })
         .in('status', ['submitted', 'pending_approval'])
       
-      if (Object.keys(agentFilter).length > 0) {
-        pendingQuery = pendingQuery.match(agentFilter)
-      }
+      pendingQuery = addAgentFilter(pendingQuery)
 
       const { count: pendingApplications, error: pendingError } = await pendingQuery
       if (pendingError) throw pendingError
@@ -115,9 +123,7 @@ export function useAdminStats() {
         .select('*', { count: 'exact', head: true })
         .in('status', ['approved', 'active'])
       
-      if (Object.keys(agentFilter).length > 0) {
-        approvedQuery = approvedQuery.match(agentFilter)
-      }
+      approvedQuery = addAgentFilter(approvedQuery)
 
       const { count: approvedApplications, error: approvedError } = await approvedQuery
       if (approvedError) throw approvedError
@@ -128,9 +134,7 @@ export function useAdminStats() {
         .select('*', { count: 'exact', head: true })
         .eq('status', 'rejected')
       
-      if (Object.keys(agentFilter).length > 0) {
-        rejectedQuery = rejectedQuery.match(agentFilter)
-      }
+      rejectedQuery = addAgentFilter(rejectedQuery)
 
       const { count: rejectedApplications, error: rejectedError } = await rejectedQuery
       if (rejectedError) throw rejectedError
@@ -179,6 +183,25 @@ export function useAdminChartData() {
       const sixMonthsAgo = new Date()
       sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6)
 
+      // Para agents: obtener sus registration IDs
+      let agentRegistrationIds: string[] = []
+      
+      if (isAgent && agentId) {
+        const { data: registrations } = await supabase
+          .from('agent_insurance_registrations')
+          .select('id')
+          .eq('agent_profile_id', agentId)
+        
+        agentRegistrationIds = registrations?.map(r => r.id) || []
+      } else if (isSupportStaff && userScope === 'agent_specific' && assignedAgentId) {
+        const { data: registrations } = await supabase
+          .from('agent_insurance_registrations')
+          .select('id')
+          .eq('agent_profile_id', assignedAgentId)
+        
+        agentRegistrationIds = registrations?.map(r => r.id) || []
+      }
+
       // Construir query con filtros según rol
       let query = supabase
         .from('applications')
@@ -186,11 +209,9 @@ export function useAdminChartData() {
         .gte('created_at', sixMonthsAgo.toISOString())
         .order('created_at', { ascending: true })
 
-      // Agregar filtros según rol y scope
-      if (isAgent && agentId) {
-        query = query.eq('agent_id', agentId)
-      } else if (isSupportStaff && userScope === 'agent_specific' && assignedAgentId) {
-        query = query.eq('agent_id', assignedAgentId)
+      // Agregar filtro de agent si corresponde
+      if (agentRegistrationIds.length > 0) {
+        query = query.in('agent_id', agentRegistrationIds)
       }
 
       const { data: applications, error: appsError } = await query
@@ -284,6 +305,25 @@ export function useRecentActivity() {
       setError(null)
       const supabase = createClient()
 
+      // Para agents: obtener sus registration IDs
+      let agentRegistrationIds: string[] = []
+      
+      if (isAgent && agentId) {
+        const { data: registrations } = await supabase
+          .from('agent_insurance_registrations')
+          .select('id')
+          .eq('agent_profile_id', agentId)
+        
+        agentRegistrationIds = registrations?.map(r => r.id) || []
+      } else if (isSupportStaff && userScope === 'agent_specific' && assignedAgentId) {
+        const { data: registrations } = await supabase
+          .from('agent_insurance_registrations')
+          .select('id')
+          .eq('agent_profile_id', assignedAgentId)
+        
+        agentRegistrationIds = registrations?.map(r => r.id) || []
+      }
+
       // Últimas 10 applications (filtradas según rol)
       let appsQuery = supabase
         .from('applications')
@@ -296,10 +336,8 @@ export function useRecentActivity() {
         .order('created_at', { ascending: false })
         .limit(10)
       
-      if (isAgent && agentId) {
-        appsQuery = appsQuery.eq('agent_id', agentId)
-      } else if (isSupportStaff && userScope === 'agent_specific' && assignedAgentId) {
-        appsQuery = appsQuery.eq('agent_id', assignedAgentId)
+      if (agentRegistrationIds.length > 0) {
+        appsQuery = appsQuery.in('agent_id', agentRegistrationIds)
       }
 
       const { data: apps, error: appsError } = await appsQuery
@@ -314,9 +352,9 @@ export function useRecentActivity() {
         .limit(5)
       
       if (isAgent && agentId) {
-        usersQuery = usersQuery.eq('agent_id', agentId)
+        usersQuery = usersQuery.eq('agent_profile_id', agentId)
       } else if (isSupportStaff && userScope === 'agent_specific' && assignedAgentId) {
-        usersQuery = usersQuery.eq('agent_id', assignedAgentId)
+        usersQuery = usersQuery.eq('agent_profile_id', assignedAgentId)
       }
 
       const { data: users, error: usersError } = await usersQuery

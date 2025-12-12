@@ -14,6 +14,9 @@ function AdminLogin() {
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [successMessage, setSuccessMessage] = useState('')
+  const [showForgotPassword, setShowForgotPassword] = useState(false)
+  const [resetEmail, setResetEmail] = useState('')
   const router = useRouter()
   const searchParams = useSearchParams()
   
@@ -26,21 +29,130 @@ function AdminLogin() {
 
   // Verificar si ya hay una sesión activa y redirigir
   useEffect(() => {
+    console.log('🔄 checkSession useEffect iniciado en Login')
+    let mounted = true
+    
     const checkSession = async () => {
-      const { data: { session } } = await supabase.auth.getSession()
-      if (session?.user) {
-        console.log('✅ Sesión activa detectada, redirigiendo a /admin...')
-        router.push('/admin')
+      try {
+        console.log('🔍 Obteniendo sesión en Login...')
+        
+        // Agregar timeout de 2 segundos a getSession
+        const getSessionPromise = supabase.auth.getSession()
+        const timeoutPromise = new Promise<never>((_, reject) => 
+          setTimeout(() => reject(new Error('getSession timeout')), 2000)
+        )
+        
+        let session = null
+        let sessionError = null
+        
+        try {
+          const result = await Promise.race([getSessionPromise, timeoutPromise]) as any
+          session = result.data?.session
+          sessionError = result.error
+        } catch (timeoutErr: any) {
+          console.warn('⚠️ getSession timeout en Login (>2s), asumiendo sin sesión')
+          return // Salir y mostrar formulario de login
+        }
+        
+        console.log('📊 Estado de sesión:', {
+          hasSession: !!session,
+          hasUser: !!session?.user,
+          userId: session?.user?.id,
+          sessionError: sessionError?.message
+        })
+        
+        if (!mounted) {
+          console.log('⏸️ Componente desmontado, cancelando verificación')
+          return
+        }
+        
+        if (session?.user) {
+          console.log('✅ Sesión activa detectada en Login para usuario:', session.user.id)
+          
+          // Crear un timeout de 1 segundo para la consulta de perfil
+          const timeoutPromise = new Promise<never>((_, reject) => 
+            setTimeout(() => reject(new Error('Timeout verificando perfil')), 1000)
+          )
+          
+          console.log('🔍 Verificando si usuario existe en public.users...')
+          const profilePromise = supabase
+            .from('users')
+            .select('id')
+            .eq('id', session.user.id)
+            .maybeSingle()
+          
+          try {
+            const result = await Promise.race([profilePromise, timeoutPromise])
+            
+            if (!mounted) return
+            
+            if ('error' in result && result.error) {
+              console.warn('⚠️ Error verificando perfil:', result.error)
+              console.log('➡️ Redirigiendo a set-password por error...')
+              router.push('/admin/set-password')
+              return
+            }
+            
+            if (!result.data) {
+              console.log('⚠️ Usuario sin perfil en BD (invitación incompleta)')
+              console.log('➡️ Redirigiendo a set-password...')
+              router.push('/admin/set-password')
+              return
+            }
+            
+            console.log('✅ Perfil encontrado en BD')
+            console.log('➡️ Redirigiendo a dashboard...')
+            router.push('/admin')
+          } catch (timeoutError) {
+            if (!mounted) return
+            console.warn('⚠️ Timeout verificando perfil (>1s)')
+            console.log('➡️ Asumiendo invitación incompleta, redirigiendo a set-password...')
+            router.push('/admin/set-password')
+          }
+        } else {
+          console.log('ℹ️ No hay sesión activa en Login, mostrando formulario')
+        }
+      } catch (e) {
+        console.error('❌ Error en checkSession:', e)
       }
     }
-    checkSession()
+    
+    // Pequeño delay para permitir que AdminAuthContext inicialice
+    const timer = setTimeout(checkSession, 100)
+    
+    return () => {
+      mounted = false
+      clearTimeout(timer)
+    }
   }, [supabase, router])
 
   useEffect(() => {
     // Detectar si viene de una invitación (hash fragment con access_token)
     const checkInvitation = async () => {
       const hash = window.location.hash
-      console.log('🔍 Hash fragment detectado:', hash)
+      const fullUrl = window.location.href
+      
+      console.log('🔍 Login page - Verificando invitación...')
+      console.log('🔍 URL completa:', fullUrl.substring(0, 300))
+      console.log('🔍 Hash fragment:', hash ? hash.substring(0, 100) + '...' : 'VACÍO')
+      console.log('🔍 Search params:', Object.fromEntries(searchParams.entries()))
+      console.log('🔍 Document referrer:', document.referrer.substring(0, 200))
+      
+      // Verificar si viene después de establecer contraseña
+      const passwordSet = searchParams.get('password_set')
+      if (passwordSet === 'true') {
+        setSuccessMessage('✅ Contraseña establecida exitosamente. Inicia sesión con tu nueva contraseña.')
+      }
+
+      // Verificar si viene después de resetear contraseña
+      const passwordReset = searchParams.get('password_reset')
+      if (passwordReset === 'success') {
+        setSuccessMessage('✅ Contraseña actualizada exitosamente. Ahora puedes iniciar sesión con tu nueva contraseña.')
+      }
+      
+      // Verificar si venimos de Supabase (el referrer puede ayudar a detectar invitaciones)
+      const isFromSupabase = document.referrer.includes('supabase.co')
+      console.log('🔍 Viene de Supabase:', isFromSupabase)
       
       if (hash && hash.includes('access_token')) {
         const hashParams = new URLSearchParams(hash.substring(1))
@@ -48,30 +160,78 @@ function AdminLogin() {
         const refreshToken = hashParams.get('refresh_token')
         const type = hashParams.get('type')
         
-        console.log('🔑 Tokens detectados:', { 
+        console.log('🔑 Tokens detectados en hash:', { 
           hasAccessToken: !!accessToken, 
           hasRefreshToken: !!refreshToken, 
           type 
         })
 
         if (accessToken && refreshToken) {
-          console.log('📧 Tokens de invitación detectados, redirigiendo a set-password...')
+          console.log('📧 ✅ Tokens de invitación detectados, estableciendo sesión...')
           
-          // Redirigir DIRECTAMENTE a set-password con el hash preservado
-          // set-password se encargará de establecer la sesión
-          window.location.href = `/admin/set-password${hash}`
-          return
+          try {
+            // Establecer la sesión directamente desde el hash
+            const { error: sessionError } = await supabase.auth.setSession({
+              access_token: accessToken,
+              refresh_token: refreshToken,
+            })
+            
+            if (sessionError) {
+              console.error('❌ Error estableciendo sesión:', sessionError)
+              // Si falla, redirigir a set-password con el hash preservado
+              window.location.href = `/admin/set-password${hash}`
+              return
+            }
+            
+            console.log('✅ Sesión establecida correctamente, redirigiendo a set-password...')
+            // Redirigir a set-password después de establecer la sesión
+            window.location.href = '/admin/set-password'
+            return
+          } catch (e) {
+            console.error('❌ Error procesando tokens:', e)
+            // Fallback: redirigir a set-password con el hash preservado
+            window.location.href = `/admin/set-password${hash}`
+            return
+          }
         }
         // Si hay token, no mostrar errores de acceso denegado
         return
       }
 
-      // Solo mostrar errores si NO hay token en el hash
+      // Verificar si hay código en los query params (PKCE flow)
+      const code = searchParams.get('code')
+      const type = searchParams.get('type')
+      
+      if (code) {
+        console.log('🔑 Code detectado en query params (PKCE flow)')
+        console.log('🔗 Redirigiendo a /auth/callback para procesar el código...')
+        // Redirigir al callback para que procese el código
+        const next = searchParams.get('next') || '/admin/set-password'
+        window.location.href = `/auth/callback?code=${code}&next=${encodeURIComponent(next)}&type=${type || 'invite'}`
+        return
+      }
+
+      // Si venimos de Supabase pero no hay hash ni code, podría ser una invitación
+      // que Supabase redirigió directamente al login. Intentar verificar si hay sesión pendiente.
+      if (isFromSupabase && !hash && !code) {
+        console.log('⚠️ Viene de Supabase pero sin tokens. Verificando sesión...')
+        const { data: { session } } = await supabase.auth.getSession()
+        if (session?.user) {
+          console.log('✅ Sesión encontrada después de venir de Supabase, redirigiendo a set-password...')
+          window.location.href = '/admin/set-password'
+          return
+        }
+      }
+
+      // Solo mostrar errores si NO hay token ni código
       const errorParam = searchParams.get('error')
       if (errorParam === 'access_denied') {
         setError('No tienes permisos para acceder al panel de administración.')
       } else if (errorParam === 'role_check_failed') {
         setError('Error al verificar permisos. Por favor intenta nuevamente.')
+      } else if (errorParam) {
+        console.warn('⚠️ Error en login:', errorParam)
+        setError(`Error de autenticación: ${errorParam}`)
       }
     }
 
@@ -185,6 +345,45 @@ function AdminLogin() {
     }
   }
 
+  const handleForgotPassword = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setLoading(true)
+    setError('')
+    setSuccessMessage('')
+
+    console.log('🔐 Iniciando recuperación de contraseña...')
+    console.log('📧 Email:', resetEmail)
+
+    try {
+      const { error: resetError } = await supabase.auth.resetPasswordForEmail(resetEmail, {
+        redirectTo: `${window.location.origin}/admin/reset-password`,
+      })
+
+      if (resetError) {
+        console.error('❌ Error enviando email de recuperación:', resetError)
+        setError('Error al enviar el email de recuperación. Verifica que el email sea correcto.')
+        setLoading(false)
+        return
+      }
+
+      console.log('✅ Email de recuperación enviado exitosamente')
+      setSuccessMessage('✅ Se ha enviado un enlace de recuperación a tu email. Por favor revisa tu bandeja de entrada.')
+      setResetEmail('')
+      
+      // Volver al formulario de login después de 3 segundos
+      setTimeout(() => {
+        setShowForgotPassword(false)
+        setSuccessMessage('')
+      }, 5000)
+      
+      setLoading(false)
+    } catch (err) {
+      console.error('Error en recuperación de contraseña:', err)
+      setError('Error inesperado al enviar el email de recuperación.')
+      setLoading(false)
+    }
+  }
+
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-100">
       <div className="max-w-md w-full space-y-8 p-8 bg-white rounded-xl shadow-lg">
@@ -197,6 +396,13 @@ function AdminLogin() {
           <p className="mt-2 text-lg text-gray-600">Panel de Administración</p>
         </div>
 
+        {/* Mensaje de éxito */}
+        {successMessage && (
+          <Alert className="border-green-200 bg-green-50 text-green-800">
+            <AlertDescription>{successMessage}</AlertDescription>
+          </Alert>
+        )}
+
         {/* Errores */}
         {error && (
           <Alert variant="destructive">
@@ -205,53 +411,145 @@ function AdminLogin() {
           </Alert>
         )}
 
-        {/* Formulario de Login */}
-        <form onSubmit={handleLogin} className="mt-8 space-y-6">
-          <div className="space-y-4">
-            <div>
-              <Label htmlFor="email">Email</Label>
-              <Input
-                id="email"
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                className="mt-1"
-                placeholder="admin@epicare.com"
-                disabled={loading}
-              />
+        {/* Formulario de Login o Recuperar Contraseña */}
+        {!showForgotPassword ? (
+          <form onSubmit={handleLogin} className="mt-8 space-y-6">
+            <div className="space-y-4">
+              <div>
+                <Label htmlFor="email">Email</Label>
+                <Input
+                  id="email"
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                  className="mt-1"
+                  placeholder="admin@epicare.com"
+                  disabled={loading}
+                />
+              </div>
+
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <Label htmlFor="password">Contraseña</Label>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowForgotPassword(true)
+                      setError('')
+                      setSuccessMessage('')
+                    }}
+                    className="text-xs text-[#F26023] hover:text-[#d9531f] font-medium"
+                  >
+                    ¿Olvidaste tu contraseña?
+                  </button>
+                </div>
+                <Input
+                  id="password"
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  className="mt-1"
+                  placeholder="••••••••"
+                  disabled={loading}
+                />
+              </div>
             </div>
 
-            <div>
-              <Label htmlFor="password">Contraseña</Label>
-              <Input
-                id="password"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                className="mt-1"
-                placeholder="••••••••"
-                disabled={loading}
-              />
+            <Button
+              type="submit"
+              className="w-full bg-[#F26023] hover:bg-[#d9531f]"
+              disabled={loading}
+            >
+              {loading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Iniciando sesión...
+                </>
+              ) : (
+                'Iniciar Sesión'
+              )}
+            </Button>
+          </form>
+        ) : (
+          <form onSubmit={handleForgotPassword} className="mt-8 space-y-6">
+            <div className="space-y-4">
+              <div className="text-center mb-4">
+                <h3 className="text-lg font-semibold text-gray-900">Recuperar Contraseña</h3>
+                <p className="text-sm text-gray-600 mt-2">
+                  Ingresa tu email y te enviaremos un enlace para restablecer tu contraseña.
+                </p>
+              </div>
+
+              <div>
+                <Label htmlFor="reset-email">Email</Label>
+                <Input
+                  id="reset-email"
+                  type="email"
+                  value={resetEmail}
+                  onChange={(e) => setResetEmail(e.target.value)}
+                  required
+                  className="mt-1"
+                  placeholder="admin@epicare.com"
+                  disabled={loading}
+                />
+              </div>
             </div>
+
+            <div className="space-y-3">
+              <Button
+                type="submit"
+                className="w-full bg-[#F26023] hover:bg-[#d9531f]"
+                disabled={loading}
+              >
+                {loading ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Enviando...
+                  </>
+                ) : (
+                  'Enviar enlace de recuperación'
+                )}
+              </Button>
+
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full"
+                onClick={() => {
+                  setShowForgotPassword(false)
+                  setResetEmail('')
+                  setError('')
+                  setSuccessMessage('')
+                }}
+                disabled={loading}
+              >
+                Volver al inicio de sesión
+              </Button>
+            </div>
+          </form>
+        )}
+
+        <div className="mt-4 pt-4 border-t border-gray-100">
+          <div className="text-center space-y-3">
+            <Button
+              variant="outline"
+              className="w-full text-sm"
+              onClick={() => router.push('/admin/set-password')}
+            >
+              ¿Tienes problemas con tu invitación?
+            </Button>
+            
+            <Button
+              variant="ghost"
+              className="w-full text-xs text-gray-400 h-6"
+              onClick={() => router.push('/admin/test-rls')}
+            >
+              Diagnóstico de conexión
+            </Button>
           </div>
-
-          <Button
-            type="submit"
-            className="w-full bg-[#F26023] hover:bg-[#d9531f]"
-            disabled={loading}
-          >
-            {loading ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Iniciando sesión...
-              </>
-            ) : (
-              'Iniciar Sesión'
-            )}
-          </Button>
-        </form>
+        </div>
 
         {/* Nota de seguridad */}
         <div className="mt-6 text-center text-sm text-gray-500">

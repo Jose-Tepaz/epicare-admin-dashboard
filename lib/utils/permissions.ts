@@ -219,22 +219,22 @@ export async function canAccessEntity(
       case 'user': {
         const { data } = await supabase
           .from('users')
-          .select('agent_id, created_by')
+          .select('agent_profile_id, created_by')
           .eq('id', entityId)
           .single()
-        // Puede ver si el user tiene su agent_id O si él lo creó
-        return data?.agent_id === agentData.id || data?.created_by === userId
+        // Puede ver si el user tiene su agent_profile_id O si él lo creó
+        return data?.agent_profile_id === agentData.id || data?.created_by === userId
       }
       case 'document': {
         const { data } = await supabase
           .from('documents')
           .select(`
             client_id,
-            users!documents_client_id_fkey (agent_id)
+            users!documents_client_id_fkey (agent_profile_id)
           `)
           .eq('id', entityId)
           .single()
-        return (data as any)?.users?.agent_id === agentData.id
+        return (data as any)?.users?.agent_profile_id === agentData.id
       }
       case 'ticket': {
         const { data } = await supabase

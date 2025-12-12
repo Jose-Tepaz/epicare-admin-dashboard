@@ -5,11 +5,11 @@ import type React from "react"
 import { useState } from "react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
-import { Menu, X, Settings, Users, FileText, ClipboardList, BarChart3, Bell, LogOut, Shield } from "lucide-react"
+import { Menu, X, Settings, Users, FileText, ClipboardList, BarChart3, Bell, LogOut } from "lucide-react"
 import Link from "next/link"
 import { useAdminAuth } from "@/contexts/admin-auth-context"
-import { Badge } from "@/components/ui/badge"
 import { NotificationsDropdown } from "@/components/notifications-dropdown"
+import { RoleSwitcher } from "@/components/role-switcher"
 
 const adminNavigationItems = [
   { name: "Dashboard", href: "/admin", icon: BarChart3, active: false },
@@ -26,14 +26,12 @@ interface AdminLayoutProps {
 
 export function AdminLayout({ children, currentPage = "Dashboard" }: AdminLayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false)
-  const { user, userRoles, signOut, isAdmin } = useAdminAuth()
+  const { user, signOut } = useAdminAuth()
 
   const getInitials = (email: string | undefined | null) => {
     if (!email) return 'U'
     return email.slice(0, 2).toUpperCase()
   }
-
-  const primaryRole = userRoles[0]?.name || 'cliente'
 
   return (
     <div className="flex h-screen bg-gray-50">
@@ -97,8 +95,9 @@ export function AdminLayout({ children, currentPage = "Dashboard" }: AdminLayout
           {/* User Profile & Logout */}
           <div className="p-4 border-t border-[#3a4145]">
             {user && (
-              <div className="mb-3 p-3 bg-[#3a4145] rounded-lg">
-                <div className="flex items-center gap-3 mb-2">
+              <div className="mb-3 p-3 bg-[#3a4145] rounded-lg space-y-3">
+                {/* User info */}
+                <div className="flex items-center gap-3">
                   <div className="w-8 h-8 bg-orange-500 rounded-full flex items-center justify-center">
                     <span className="text-white text-xs font-medium">{getInitials(user.email)}</span>
                   </div>
@@ -106,16 +105,8 @@ export function AdminLayout({ children, currentPage = "Dashboard" }: AdminLayout
                     <p className="text-sm font-medium text-white truncate">{user.email}</p>
                   </div>
                 </div>
-                {userRoles.length > 0 && (
-                  <div className="flex gap-1 flex-wrap">
-                    {userRoles.map((role) => (
-                      <Badge key={role.name} variant="secondary" className="text-xs">
-                        <Shield className="h-3 w-3 mr-1" />
-                        {role.name}
-                      </Badge>
-                    ))}
-                  </div>
-                )}
+                {/* Role Switcher in Sidebar */}
+                <RoleSwitcher variant="sidebar" />
               </div>
             )}
             <Link
@@ -146,6 +137,7 @@ export function AdminLayout({ children, currentPage = "Dashboard" }: AdminLayout
           </Button>
           <span className="font-medium text-gray-900">Admin Panel</span>
           <div className="flex items-center gap-2">
+            <RoleSwitcher variant="header" />
             <NotificationsDropdown />
           </div>
         </div>
@@ -159,17 +151,15 @@ export function AdminLayout({ children, currentPage = "Dashboard" }: AdminLayout
           <div className="flex items-center gap-3">
             <NotificationsDropdown />
             {user && (
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-3">
                 <div className="w-8 h-8 bg-orange-500 rounded-full flex items-center justify-center">
                   <span className="text-white text-sm font-medium">{getInitials(user.email)}</span>
                 </div>
-                <div className="flex flex-col">
+                <div className="flex flex-col items-start">
                   <span className="text-sm font-medium text-gray-700">
                     {user.email ? user.email.split('@')[0] : 'Usuario'}
                   </span>
-                  <Badge variant="secondary" className="text-xs">
-                    {primaryRole}
-                  </Badge>
+                  <RoleSwitcher variant="header" />
                 </div>
               </div>
             )}

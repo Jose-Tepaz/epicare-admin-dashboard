@@ -8,7 +8,8 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useCreateUser, useAvailableRoles } from "@/lib/hooks/use-users"
 import { useAdminAuth } from "@/contexts/admin-auth-context"
-import { Loader2 } from "lucide-react"
+import { useAgents } from "@/hooks/use-agents"
+import { Loader2, Info } from "lucide-react"
 
 interface NewUserModalProps {
   open: boolean
@@ -27,16 +28,25 @@ export function NewUserModal({ open, onOpenChange, onSuccess }: NewUserModalProp
     city: "",
     zipcode: "",
     role: "", // ✅ Cambiado de roleId a role
+    agent_profile_id: "", // Nuevo campo para selección de agente
   })
   const [errors, setErrors] = useState<Record<string, string>>({})
   const { createUser, creating } = useCreateUser()
   const { roles: availableRoles, loading: rolesLoading } = useAvailableRoles()
-  const { isSuperAdmin } = useAdminAuth()
+  const { isSuperAdmin, isAgent, user, activeRole, agentId } = useAdminAuth()
+  const { agents, loading: agentsLoading, getAgentDisplayName, getDefaultAgent } = useAgents()
 
-  // Filtrar roles según permisos: solo super_admin puede asignar admin o super_admin
+  // Filtrar roles según permisos:
+  // - super_admin puede asignar cualquier rol
+  // - admin puede asignar todos excepto admin y super_admin
+  // - agent solo puede asignar client y support_staff
   const filteredRoles = availableRoles.filter(role => {
     if (role.name === 'admin' || role.name === 'super_admin') {
       return isSuperAdmin
+    }
+    if (isAgent) {
+      // Los agentes solo pueden crear clientes y support staff
+      return role.name === 'client' || role.name === 'support_staff'
     }
     return true
   })
@@ -54,10 +64,18 @@ export function NewUserModal({ open, onOpenChange, onSuccess }: NewUserModalProp
         city: "",
         zipcode: "",
         role: "",
+        agent_profile_id: "",
       })
       setErrors({})
     }
   }, [open])
+
+  // Determinar si mostrar el selector de agente
+  // Solo admin y super_admin pueden seleccionar agente
+  // Los agentes automáticamente asignan su propio ID
+  const shouldShowAgentSelector = 
+    (activeRole === 'admin' || activeRole === 'super_admin') && 
+    formData.role === 'client'
 
   const validateForm = () => {
     const newErrors: Record<string, string> = {}
@@ -91,6 +109,12 @@ export function NewUserModal({ open, onOpenChange, onSuccess }: NewUserModalProp
       return
     }
 
+    // Si es un agente creando un cliente, asignar automáticamente su agentId
+    let agentProfileId = formData.agent_profile_id || undefined
+    if (isAgent && formData.role === 'client' && agentId) {
+      agentProfileId = agentId
+    }
+
     const result = await createUser({
       email: formData.email.trim(),
       first_name: formData.first_name.trim(),
@@ -101,6 +125,7 @@ export function NewUserModal({ open, onOpenChange, onSuccess }: NewUserModalProp
       city: formData.city.trim() || undefined,
       zipcode: formData.zipcode.trim() || undefined,
       role: formData.role, // ✅ Cambiado de roleId a role
+      agent_profile_id: agentProfileId, // Asignación automática para agentes
     })
 
     if (result.success && result.user) {
@@ -117,6 +142,7 @@ export function NewUserModal({ open, onOpenChange, onSuccess }: NewUserModalProp
         city: "",
         zipcode: "",
         role: "", // ✅ Cambiado de roleId a role
+        agent_profile_id: "",
       })
       setErrors({})
       onOpenChange(false)
@@ -138,9 +164,14 @@ export function NewUserModal({ open, onOpenChange, onSuccess }: NewUserModalProp
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[500px]">
         <DialogHeader>
-          <DialogTitle>Registrar Nuevo Usuario</DialogTitle>
+          <DialogTitle>
+            {isAgent ? "Registrar Nuevo Cliente/Staff" : "Registrar Nuevo Usuario"}
+          </DialogTitle>
           <DialogDescription>
-            Crea un nuevo usuario en el sistema. El usuario recibirá un correo de invitación para establecer su contraseña y completar su perfil.
+            {isAgent 
+              ? "Crea un nuevo cliente o miembro de tu equipo. El usuario recibirá un correo de invitación para establecer su contraseña."
+              : "Crea un nuevo usuario en el sistema. El usuario recibirá un correo de invitación para establecer su contraseña y completar su perfil."
+            }
           </DialogDescription>
         </DialogHeader>
 
@@ -279,6 +310,51 @@ export function NewUserModal({ open, onOpenChange, onSuccess }: NewUserModalProp
               <p className="text-sm text-red-500">{errors.role}</p>
             )}
           </div>
+
+          {/* Selector de Agente - Solo visible para admin/super_admin cuando el rol es 'client' */}
+          {shouldShowAgentSelector && (
+            <div className="space-y-2 border-t pt-4">
+              <Label htmlFor="agent_profile_id" className="flex items-center gap-2">
+                Asignar Agente
+                <Info className="h-4 w-4 text-muted-foreground" />
+              </Label>
+              <Select 
+                value={formData.agent_profile_id} 
+                onValueChange={(value) => handleChange("agent_profile_id", value)}
+                disabled={agentsLoading || creating}
+              >
+                <SelectTrigger id="agent_profile_id">
+                  <SelectValue placeholder="Agente por defecto" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">
+                    <span className="flex items-center gap-2">
+                      Agente por defecto
+                      {getDefaultAgent() && (
+                        <span className="text-xs text-muted-foreground">
+                          ({getAgentDisplayName(getDefaultAgent()!)})
+                        </span>
+                      )}
+                    </span>
+                  </SelectItem>
+                  {agents.map((agent) => (
+                    <SelectItem key={agent.id} value={agent.id}>
+                      <span className="flex items-center gap-2">
+                        {getAgentDisplayName(agent)}
+                        {agent.is_default && (
+                          <span className="text-xs text-muted-foreground">(Default)</span>
+                        )}
+                      </span>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground flex items-start gap-1">
+                <Info className="h-3 w-3 mt-0.5 flex-shrink-0" />
+                Si no seleccionas un agente, se asignará automáticamente el agente por defecto de la plataforma
+              </p>
+            </div>
+          )}
 
           <div className="flex justify-end gap-2 pt-4">
             <Button

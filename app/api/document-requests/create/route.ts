@@ -104,11 +104,11 @@ export async function POST(request: NextRequest) {
 
       const { data: clientAgentCheck } = await adminClient
         .from('users')
-        .select('agent_id')
+        .select('agent_profile_id')
         .eq('id', clientId)
         .single()
 
-      if (clientAgentCheck?.agent_id !== agentData.id) {
+      if (clientAgentCheck?.agent_profile_id !== agentData.id) {
         return NextResponse.json({ 
           error: 'No tienes permisos para solicitar documentos a este cliente' 
         }, { status: 403 })
@@ -119,11 +119,11 @@ export async function POST(request: NextRequest) {
     if (isSupportStaff && userData.scope === 'agent_specific') {
       const { data: clientAgentCheck } = await adminClient
         .from('users')
-        .select('agent_id')
+        .select('agent_profile_id')
         .eq('id', clientId)
         .single()
 
-      if (clientAgentCheck?.agent_id !== userData.assigned_to_agent_id) {
+      if (clientAgentCheck?.agent_profile_id !== userData.assigned_to_agent_id) {
         return NextResponse.json({ 
           error: 'No tienes permisos para solicitar documentos a este cliente' 
         }, { status: 403 })

@@ -20,11 +20,15 @@ export function useDocuments(filters: DocumentFilters = {}) {
 
   useEffect(() => {
     isMounted.current = true
+    // Resetear fetchingRef cuando el componente se monta
+    fetchingRef.current = false
     return () => {
       isMounted.current = false
       if (abortControllerRef.current) {
         abortControllerRef.current.abort()
       }
+      // Resetear fetchingRef cuando el componente se desmonta
+      fetchingRef.current = false
     }
   }, [])
 
@@ -131,16 +135,14 @@ export function useDocuments(filters: DocumentFilters = {}) {
 
       if (fetchError) {
         // Ignorar errores de abort
-        if (fetchError.code === '20' || fetchError.message.includes('AbortError')) { // Code 20 is typically abort in some contexts, but checking message is safer
-             console.log('Request aborted')
-             return
+        if (fetchError.code === '20' || fetchError.message.includes('AbortError')) {
+          console.log('Request aborted')
+          // No hacer nada más, dejar que llegue al finally
+        } else {
+          console.error('Error fetching documents:', fetchError)
+          throw fetchError
         }
-        
-        console.error('Error fetching documents:', fetchError)
-        throw fetchError
-      }
-
-      if (isMounted.current && !timeoutCompleted) {
+      } else if (isMounted.current && !timeoutCompleted) {
         console.log('Documents fetched successfully:', {
           count: data?.length
         })
@@ -150,16 +152,17 @@ export function useDocuments(filters: DocumentFilters = {}) {
       // Ignorar errores de abort
       if (err.name === 'AbortError' || err.message?.includes('AbortError') || err.code === '20') {
         console.log('Request aborted')
-        return
-      }
-      
-      console.error('Error fetching documents:', err)
-      if (isMounted.current && !timeoutCompleted) {
-        setError(err instanceof Error ? err.message : 'Error al cargar documentos')
+        // No hacer nada más, dejar que llegue al finally
+      } else {
+        console.error('Error fetching documents:', err)
+        if (isMounted.current && !timeoutCompleted) {
+          setError(err instanceof Error ? err.message : 'Error al cargar documentos')
+        }
       }
     } finally {
-      clearTimeout(timeoutId)
+      // SIEMPRE resetear fetchingRef, incluso si se abortó
       fetchingRef.current = false
+      clearTimeout(timeoutId)
       if (isMounted.current && !timeoutCompleted) {
         setLoading(false)
       }
@@ -167,28 +170,37 @@ export function useDocuments(filters: DocumentFilters = {}) {
   }, [authLoading, user, filters.search, filters.document_type, filters.status, filters.client_id, filters.date_from, filters.date_to, isAdmin, isSuperAdmin, isAgent, isSupportStaff])
 
   // Efecto principal que ejecuta fetchDocuments cuando cambian las dependencias
-  // Usamos un ref para evitar llamadas duplicadas cuando authLoading cambia rápidamente
-  const lastFetchRef = useRef<{ authLoading: boolean; userId: string | null }>({ 
-    authLoading: true, 
-    userId: null 
-  })
-  
   useEffect(() => {
-    // Solo ejecutar si realmente necesitamos hacer fetch
-    const shouldFetch = 
-      !authLoading && 
-      user && 
-      (lastFetchRef.current.authLoading !== authLoading || 
-       lastFetchRef.current.userId !== user.id)
-    
-    if (shouldFetch) {
-      lastFetchRef.current = { authLoading, userId: user.id }
-      fetchDocuments()
-    } else if (!authLoading && !user) {
-      // Si no hay usuario y auth terminó de cargar, asegurar que loading sea false
-      setLoading(false)
+    // Esperar a que la autenticación termine
+    if (authLoading) {
+      return
     }
-  }, [authLoading, user, fetchDocuments])
+    
+    // Si no hay usuario, no hacer fetch
+    if (!user) {
+      setLoading(false)
+      setDocuments([])
+      return
+    }
+    
+    // Ejecutar fetch cuando:
+    // 1. El usuario está autenticado
+    // 2. Los filtros cambian
+    // 3. El usuario cambia
+    // El fetchingRef dentro de fetchDocuments evitará llamadas concurrentes
+    fetchDocuments()
+  }, [
+    authLoading, 
+    user?.id, 
+    fetchDocuments,
+    // Incluir filtros directamente para que se ejecute cuando cambien
+    filters.search,
+    filters.document_type,
+    filters.status,
+    filters.client_id,
+    filters.date_from,
+    filters.date_to
+  ])
 
   return { documents, loading, error, refetch: fetchDocuments }
 }

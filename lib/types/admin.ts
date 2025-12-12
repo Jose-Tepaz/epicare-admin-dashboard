@@ -9,6 +9,72 @@ export type SupportStaffScope = 'global' | 'agent_specific'
 // Roles del sistema
 export type RoleName = 'super_admin' | 'admin' | 'agent' | 'support_staff' | 'client'
 
+// ============================================
+// TIPOS PARA ROLE SWITCHING
+// ============================================
+
+/**
+ * Resultado de cambiar de rol
+ */
+export interface RoleSwitchResult {
+  success: boolean
+  old_role: RoleName
+  new_role: RoleName
+  switched_at: string
+}
+
+/**
+ * Información de rol para el switcher
+ */
+export interface RoleInfo {
+  name: RoleName
+  displayName: string
+  description: string
+  icon: 'shield' | 'user-cog' | 'headphones' | 'user' | 'crown'
+  color: string
+}
+
+/**
+ * Mapa de información de roles
+ */
+export const ROLE_INFO: Record<RoleName, RoleInfo> = {
+  super_admin: {
+    name: 'super_admin',
+    displayName: 'Super Admin',
+    description: 'Control total del sistema',
+    icon: 'crown',
+    color: 'text-purple-600 bg-purple-100'
+  },
+  admin: {
+    name: 'admin',
+    displayName: 'Admin',
+    description: 'Gestión amplia del sistema',
+    icon: 'shield',
+    color: 'text-blue-600 bg-blue-100'
+  },
+  agent: {
+    name: 'agent',
+    displayName: 'Agent',
+    description: 'Gestión de clientes propios',
+    icon: 'user-cog',
+    color: 'text-green-600 bg-green-100'
+  },
+  support_staff: {
+    name: 'support_staff',
+    displayName: 'Support Staff',
+    description: 'Soporte técnico y tickets',
+    icon: 'headphones',
+    color: 'text-orange-600 bg-orange-100'
+  },
+  client: {
+    name: 'client',
+    displayName: 'Client',
+    description: 'Usuario final',
+    icon: 'user',
+    color: 'text-gray-600 bg-gray-100'
+  }
+}
+
 // Estados de aplicaciones (según BD actual)
 export type ApplicationStatus = 
   | 'draft' 

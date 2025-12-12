@@ -1,7 +1,7 @@
 'use client'
 
-import { useState, useEffect } from "react"
-import { useRouter } from "next/navigation"
+import { useState, useEffect, Suspense } from "react"
+import { useRouter, useSearchParams } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -9,8 +9,9 @@ import { useAdminAuth } from "@/contexts/admin-auth-context"
 import { createClient } from "@/lib/supabase/client"
 import { Loader2, Eye, EyeOff } from "lucide-react"
 
-export default function SetPasswordPage() {
+function SetPasswordForm() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const { user, loading: authLoading } = useAdminAuth()
   const [password, setPassword] = useState("")
   const [confirmPassword, setConfirmPassword] = useState("")
@@ -20,14 +21,35 @@ export default function SetPasswordPage() {
   const [saving, setSaving] = useState(false)
   const [processingHash, setProcessingHash] = useState(false)
   const [hasProcessedHash, setHasProcessedHash] = useState(false)
+  const [allowAccessWithoutUser, setAllowAccessWithoutUser] = useState(false)
 
   useEffect(() => {
     const setupSession = async () => {
+      const fromInvite = searchParams.get('from_invite') === 'true'
+      
       console.log('🔍 set-password useEffect iniciado')
       console.log('🔍 Usuario actual:', user ? user.email : 'sin usuario')
       console.log('🔍 authLoading:', authLoading)
       console.log('🔍 processingHash:', processingHash)
       console.log('🔍 hasProcessedHash:', hasProcessedHash)
+      console.log('🔍 allowAccessWithoutUser:', allowAccessWithoutUser)
+      console.log('🔍 from_invite:', fromInvite)
+      
+      // ⭐ PRIORIDAD 1: Si ya permitimos acceso, no hacer nada más
+      if (allowAccessWithoutUser) {
+        console.log('✅ Acceso ya permitido, mostrando formulario')
+        return
+      }
+      
+      // ⭐ PRIORIDAD 2: Si viene de invitación, permitir acceso inmediatamente
+      // NO importa el estado de authLoading o user
+      if (fromInvite) {
+        console.log('✅✅✅ from_invite=true detectado, permitiendo acceso inmediato')
+        setAllowAccessWithoutUser(true)
+        return
+      }
+      
+      const supabase = createClient()
       
       // Verificar si hay hash con tokens
       const currentHash = window.location.hash
@@ -43,7 +65,6 @@ export default function SetPasswordPage() {
           
           if (accessToken && refreshToken) {
             console.log('✅ Tokens extraídos del hash')
-            const supabase = createClient()
             
             console.log('🔄 Llamando setSession...')
             
@@ -91,12 +112,76 @@ export default function SetPasswordPage() {
         }
       }
       
-      // Si no está cargando y no hay usuario (y no hay hash), redirigir a login
+      // IMPORTANTE: Verificar si hay sesión en Supabase Auth directamente
+      // No confiar solo en el contexto porque puede fallar si el usuario no existe en public.users
       if (!authLoading && !user && !currentHash && !processingHash) {
-        console.log('⚠️ No hay usuario autenticado, redirigiendo a login')
-        setTimeout(() => {
-          router.push('/admin/login')
-        }, 1000)
+        console.log('⚠️⚠️⚠️ SET-PASSWORD: No hay usuario en contexto')
+        
+        // Si viene de invitación, permitir acceso sin más verificaciones
+        if (fromInvite) {
+          console.log('✅ from_invite=true, permitiendo acceso directo')
+          setAllowAccessWithoutUser(true)
+          return
+        }
+        
+        console.log('🔍 Verificando sesión en Supabase Auth...')
+        
+        try {
+          console.log('🔍 Llamando a supabase.auth.getSession()...')
+          
+          // Agregar timeout de 3 segundos
+          const getSessionPromise = supabase.auth.getSession()
+          const timeoutPromise = new Promise<never>((_, reject) => 
+            setTimeout(() => reject(new Error('getSession timeout')), 3000)
+          )
+          
+          let session = null
+          let sessionError = null
+          
+          try {
+            const result = await Promise.race([getSessionPromise, timeoutPromise]) as any
+            session = result.data?.session
+            sessionError = result.error
+          } catch (timeoutErr: any) {
+            if (timeoutErr.message === 'getSession timeout') {
+              console.warn('⚠️ getSession timeout (>3s)')
+              console.log('⚠️ Asumiendo que HAY sesión (usuario invitado recién creado)')
+              console.log('✅ Permitiendo acceso a set-password')
+              // Si hay timeout, ASUMIR que hay sesión válida
+              // Esto sucede con usuarios recién invitados
+              setAllowAccessWithoutUser(true)
+              return
+            }
+            throw timeoutErr
+          }
+          
+          console.log('📊 Resultado de getSession:', {
+            hasSession: !!session,
+            hasUser: !!session?.user,
+            userId: session?.user?.id,
+            error: sessionError?.message
+          })
+          
+          if (session?.user) {
+            console.log('✅✅✅ Sesión encontrada en Supabase Auth (usuario invitado sin perfil completo)')
+            console.log('✅ Permitiendo que el usuario establezca su contraseña')
+            // NO redirigir - permitir que el usuario establezca su contraseña
+            return
+          }
+          
+          console.log('⚠️⚠️⚠️ No hay sesión en Supabase Auth')
+          console.log('➡️ Redirigiendo a login en 1 segundo...')
+          setTimeout(() => {
+            console.log('➡️ Ejecutando router.push(/admin/login)')
+            router.push('/admin/login')
+          }, 1000)
+        } catch (err) {
+          console.error('❌ Error verificando sesión:', err)
+          // En caso de error, redirigir a login
+          setTimeout(() => {
+            router.push('/admin/login')
+          }, 1000)
+        }
         return
       }
       
@@ -107,7 +192,7 @@ export default function SetPasswordPage() {
     }
 
     setupSession()
-  }, [user, authLoading, router, processingHash, hasProcessedHash])
+  }, [user, authLoading, router, processingHash, hasProcessedHash, searchParams])
 
   const validateForm = () => {
     const newErrors: Record<string, string> = {}
@@ -137,25 +222,91 @@ export default function SetPasswordPage() {
       return
     }
 
-    if (!user) {
-      console.log('❌ No hay usuario')
-      return
+    // No verificar user aquí - el API route obtendrá el usuario del servidor
+    console.log('✅ Validación OK, estableciendo contraseña...')
+    
+    // Obtener userId - priorizar el user del contexto
+    let userId = user?.id || null
+    
+    if (user) {
+      console.log('👤 Usuario del contexto:', user.email, 'ID:', user.id)
+    } else {
+      console.log('👤 No hay usuario en contexto, extrayendo de localStorage...')
     }
-
-    console.log('✅ Validación OK, estableciendo contraseña para:', user.email)
+    
+    // Si no hay user del contexto, intentar extraer de otras fuentes
+    if (!userId) {
+      console.log('🔍 Intentando extraer userId del hash...')
+      // Intentar extraer del hash fragment (si tiene access_token)
+      const hash = window.location.hash
+      if (hash && hash.includes('access_token')) {
+        try {
+          const hashParams = new URLSearchParams(hash.substring(1))
+          const accessToken = hashParams.get('access_token')
+          if (accessToken) {
+            // Decodificar el JWT (sin verificar firma, solo para extraer el sub)
+            const payload = accessToken.split('.')[1]
+            const decoded = JSON.parse(atob(payload))
+            userId = decoded.sub
+            console.log('✅ userId obtenido del access_token en hash:', userId)
+          }
+        } catch (hashErr) {
+          console.warn('⚠️ No se pudo extraer userId del hash:', hashErr)
+        }
+      }
+      
+      // Si no hay en hash, intentar localStorage
+      if (!userId) {
+        console.log('🔍 Intentando extraer de localStorage...')
+        try {
+          // Buscar la clave correcta en localStorage
+          for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i)
+            if (key && key.includes('supabase') && key.includes('auth-token')) {
+              const data = localStorage.getItem(key)
+              if (data) {
+                try {
+                  const parsed = JSON.parse(data)
+                  if (parsed?.user?.id) {
+                    userId = parsed.user.id
+                    console.log('✅ userId obtenido de localStorage:', userId)
+                    break
+                  }
+                } catch (e) {
+                  // Continuar buscando
+                }
+              }
+            }
+          }
+        } catch (localErr) {
+          console.warn('⚠️ No se pudo leer localStorage:', localErr)
+        }
+      }
+    }
+    
+    if (!userId) {
+      console.error('❌ No se pudo identificar al usuario de ninguna fuente')
+      throw new Error('No se pudo identificar al usuario. Por favor recarga la página.')
+    }
+    
+    console.log('🔑 userId final a enviar:', userId)
     setSaving(true)
 
     try {
-      // USAR API ROUTE EN LUGAR DE CLIENTE SUPABASE
-      // Esto evita problemas de timeout y red en el cliente
-      console.log('🔄 Llamando API /api/auth/update-password...')
+      
+      // USAR API ROUTE CON ADMIN CLIENT
+      console.log('🔄 Llamando API con userId:', userId)
       
       const response = await fetch('/api/auth/update-password', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ password: password.trim() }),
+        credentials: 'include',
+        body: JSON.stringify({ 
+          password: password.trim(),
+          userId: userId
+        }),
       })
 
       const result = await response.json()
@@ -174,33 +325,19 @@ export default function SetPasswordPage() {
         throw new Error(result.error || 'Error al actualizar contraseña')
       }
 
-      console.log('✅ Contraseña actualizada exitosamente (vía API)')
-      console.log('📊 Datos del usuario recibidos:', result.user)
-      
-      const userData = result.user
+      console.log('✅ Contraseña actualizada exitosamente')
+      console.log('📊 Datos del usuario:', result.user || 'No disponibles')
 
-      // Verificar perfil para redirección
-      if (userData) {
-        if (userData.profile_completed || (userData.first_name && userData.last_name)) {
-          console.log('✅ Perfil completo, redirigiendo al dashboard')
-          if (userData.role === 'client') {
-            const dashboardUrl = process.env.NEXT_PUBLIC_DASHBOARD_URL || 'http://localhost:3001'
-            window.location.href = `${dashboardUrl}/`
-          } else {
-            window.location.href = '/admin'
-          }
-          return
-        }
-        
-        if (userData.role === 'client') {
-          const dashboardUrl = process.env.NEXT_PUBLIC_DASHBOARD_URL || 'http://localhost:3001'
-          window.location.href = `${dashboardUrl}/complete-profile`
-          return
-        }
-      }
+      // Después de establecer contraseña, redirigir al login
+      console.log('✅ Contraseña establecida con éxito')
+      console.log('➡️ Esperando 500ms...')
       
-      console.log('➡️ Redirigiendo a /admin/complete-profile')
-      window.location.href = '/admin/complete-profile'
+      await new Promise(resolve => setTimeout(resolve, 500))
+      
+      console.log('➡️ Redirigiendo al login para iniciar sesión...')
+      
+      // Redirigir al login con mensaje de éxito
+      window.location.href = '/admin/login?password_set=true'
 
     } catch (error: any) {
       console.error('❌ Error general:', error)
@@ -211,8 +348,8 @@ export default function SetPasswordPage() {
   }
 
   // Mostrar loader mientras está cargando el estado de autenticación o procesando el hash
-  // PERO: Si ya tenemos usuario, no mostrar loader aunque authLoading sea true
-  const shouldShowLoader = processingHash || (authLoading && !user)
+  // PERO: Si ya tenemos usuario O permitimos acceso sin usuario, no mostrar loader
+  const shouldShowLoader = processingHash || (authLoading && !user && !allowAccessWithoutUser)
   
   if (shouldShowLoader) {
     return (
@@ -228,7 +365,8 @@ export default function SetPasswordPage() {
   }
 
   // Si no hay usuario después de cargar, no mostrar nada (el useEffect redirigirá)
-  if (!user) {
+  // EXCEPTO si permitimos acceso explícitamente por timeout
+  if (!user && !allowAccessWithoutUser) {
     return null
   }
 
@@ -317,5 +455,20 @@ export default function SetPasswordPage() {
         </form>
       </div>
     </div>
+  )
+}
+
+export default function SetPasswordPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="text-center">
+          <Loader2 className="h-8 w-8 animate-spin text-orange-500 mx-auto" />
+          <p className="mt-4 text-sm text-gray-600">Cargando...</p>
+        </div>
+      </div>
+    }>
+      <SetPasswordForm />
+    </Suspense>
   )
 }

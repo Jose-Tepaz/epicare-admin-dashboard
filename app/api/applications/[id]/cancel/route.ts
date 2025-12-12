@@ -39,7 +39,7 @@ export async function POST(
     // Obtener rol del usuario
     const { data: userData } = await supabase
       .from('users')
-      .select('role, agent_id, scope, assigned_to_agent_id')
+      .select('role, agent_profile_id, scope, assigned_to_agent_id')
       .eq('id', user.id)
       .single()
 
@@ -76,7 +76,7 @@ export async function POST(
     // Verificar acceso según rol y scope
     const canAccess = await verifyAccess(
       userData.role,
-      userData.agent_id,
+      userData.agent_profile_id,
       userData.scope,
       userData.assigned_to_agent_id,
       application.agent_id

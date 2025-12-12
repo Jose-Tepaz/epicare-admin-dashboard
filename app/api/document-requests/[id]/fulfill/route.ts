@@ -83,11 +83,11 @@ export async function POST(
 
       const { data: clientAgentCheck } = await adminClient
         .from('users')
-        .select('agent_id')
+        .select('agent_profile_id')
         .eq('id', currentRequest.client_id)
         .single()
 
-      if (clientAgentCheck?.agent_id !== agentData.id) {
+      if (clientAgentCheck?.agent_profile_id !== agentData.id) {
         return NextResponse.json({ 
           error: 'No tienes permisos para cumplir esta solicitud' 
         }, { status: 403 })
@@ -96,11 +96,11 @@ export async function POST(
       // Support staff con scope agent_specific solo puede cumplir solicitudes de su agent asignado
       const { data: clientAgentCheck } = await adminClient
         .from('users')
-        .select('agent_id')
+        .select('agent_profile_id')
         .eq('id', currentRequest.client_id)
         .single()
 
-      if (clientAgentCheck?.agent_id !== userData.assigned_to_agent_id) {
+      if (clientAgentCheck?.agent_profile_id !== userData.assigned_to_agent_id) {
         return NextResponse.json({ 
           error: 'No tienes permisos para cumplir esta solicitud' 
         }, { status: 403 })
