@@ -68,6 +68,17 @@ export function AdminAuthProvider({ children }: { children: React.ReactNode }) {
   // Ref para evitar llamadas concurrentes a fetchUserContext
   const fetchingContextRef = useRef(false)
   const lastFetchedUserIdRef = useRef<string | null>(null)
+  const initializingRef = useRef(false)
+
+  // Helper function para agregar timeout a promesas
+  const withTimeout = <T,>(promise: Promise<T>, timeoutMs: number, errorMsg: string): Promise<T> => {
+    return Promise.race([
+      promise,
+      new Promise<T>((_, reject) => 
+        setTimeout(() => reject(new Error(errorMsg)), timeoutMs)
+      )
+    ])
+  }
 
   // Función unificada para obtener contexto del usuario
   const fetchUserContext = async (userId: string) => {
@@ -86,20 +97,42 @@ export function AdminAuthProvider({ children }: { children: React.ReactNode }) {
     console.log('🔍 AdminAuthContext: Fetching user context for', userId)
     
     try {
-      // 1. Obtener datos básicos del usuario
+      // 1. Obtener datos básicos del usuario CON TIMEOUT
       console.log('📡 Starting Supabase query for user:', userId)
       const queryStartTime = Date.now()
       
-      // Usar maybeSingle() en lugar de single() para no lanzar error si no existe
-      // Esto es útil si el usuario tiene sesión pero no existe en public.users
-      const { data: userData, error: userError } = await supabase
-        .from('users')
-        .select('*')
-        .eq('id', userId)
-        .maybeSingle()
-
-      const queryDuration = Date.now() - queryStartTime
-      console.log(`⏱️ Query completed in ${queryDuration}ms`, { userData, userError })
+      let userData = null
+      let userError = null
+      
+      try {
+        // Agregar timeout de 4 segundos a la query
+        const userQuery = supabase
+          .from('users')
+          .select('*')
+          .eq('id', userId)
+          .maybeSingle()
+        
+        const result = await withTimeout(
+          userQuery,
+          4000,
+          'User query timeout after 4s'
+        )
+        
+        userData = result.data
+        userError = result.error
+        
+        const queryDuration = Date.now() - queryStartTime
+        console.log(`⏱️ Query completed in ${queryDuration}ms`, { userData, userError })
+      } catch (timeoutErr: any) {
+        const queryDuration = Date.now() - queryStartTime
+        console.error(`⚠️ User query timeout after ${queryDuration}ms:`, timeoutErr.message)
+        
+        // NO recargar automáticamente - solo establecer loading false
+        console.warn('⚠️ Timeout detectado en query de usuario')
+        setLoading(false)
+        fetchingContextRef.current = false
+        return
+      }
       
       if (userData) {
         console.log('📋 Columnas disponibles en users:', Object.keys(userData))
@@ -117,25 +150,42 @@ export function AdminAuthProvider({ children }: { children: React.ReactNode }) {
         return
       }
 
-      // 2. Obtener roles disponibles usando la función RPC
+      // 2. Obtener roles disponibles usando la función RPC CON TIMEOUT
       console.log('📡 Fetching available roles...')
-      const { data: rolesData, error: rolesError } = await supabase.rpc('get_available_roles')
-      
       let fetchedAvailableRoles: RoleName[] = []
       
-      if (rolesError) {
-        console.warn('⚠️ Error fetching available roles via RPC:', rolesError.message)
-        // Fallback: usar el rol principal
-        if (userData.role) {
-          fetchedAvailableRoles = [userData.role as RoleName]
+      try {
+        const rolesQuery = supabase.rpc('get_available_roles')
+        const result = await withTimeout(
+          rolesQuery,
+          3000,
+          'Roles query timeout after 3s'
+        )
+        
+        const rolesData = result.data
+        const rolesError = result.error
+        
+        if (rolesError) {
+          console.warn('⚠️ Error fetching available roles via RPC:', rolesError.message)
+          // Fallback: usar el rol principal
+          if (userData.role) {
+            fetchedAvailableRoles = [userData.role as RoleName]
+          }
+        } else if (rolesData && Array.isArray(rolesData)) {
+          fetchedAvailableRoles = rolesData as RoleName[]
+          console.log('✅ Available roles fetched:', fetchedAvailableRoles)
+        } else {
+          // Fallback: usar el rol principal
+          if (userData.role) {
+            fetchedAvailableRoles = [userData.role as RoleName]
+          }
         }
-      } else if (rolesData && Array.isArray(rolesData)) {
-        fetchedAvailableRoles = rolesData as RoleName[]
-        console.log('✅ Available roles fetched:', fetchedAvailableRoles)
-      } else {
+      } catch (timeoutErr: any) {
+        console.warn('⚠️ Roles query timeout:', timeoutErr.message)
         // Fallback: usar el rol principal
         if (userData.role) {
           fetchedAvailableRoles = [userData.role as RoleName]
+          console.log('⚠️ Using fallback role:', userData.role)
         }
       }
       
@@ -178,23 +228,29 @@ export function AdminAuthProvider({ children }: { children: React.ReactNode }) {
         setAssignedAgentId(null)
       }
 
-      // 5. Obtener agent_id si el rol activo es agent
+      // 5. Obtener agent_id si el rol activo es agent CON TIMEOUT
       if (currentActiveRole === 'agent') {
         try {
-          const { data: agentProfileData } = await supabase
+          const agentQuery = supabase
             .from('agent_profiles')
             .select('id')
             .eq('user_id', userId)
             .maybeSingle()
           
-          if (agentProfileData) {
-            setAgentId(agentProfileData.id)
-            console.log('✅ Agent profile ID:', agentProfileData.id)
+          const result = await withTimeout(
+            agentQuery,
+            3000,
+            'Agent profile query timeout after 3s'
+          )
+          
+          if (result.data) {
+            setAgentId(result.data.id)
+            console.log('✅ Agent profile ID:', result.data.id)
           } else {
             setAgentId(null)
           }
-        } catch (err) {
-          console.warn('⚠️ Error obteniendo agent_profile_id:', err)
+        } catch (err: any) {
+          console.warn('⚠️ Error obteniendo agent_profile_id:', err.message)
           setAgentId(null)
         }
       } else {
@@ -327,21 +383,58 @@ export function AdminAuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   useEffect(() => {
-    let mounted = true
-    console.log('🔄 AdminAuthProvider useEffect running')
+    // Evitar inicialización duplicada (React Strict Mode)
+    if (initializingRef.current) {
+      console.log('⏸️ Already initializing, skipping duplicate useEffect')
+      return
+    }
 
-    // Timeout de seguridad para evitar carga infinita (5 segundos)
-    const safetyTimeout = setTimeout(() => {
-      if (mounted && loading) {
-        console.warn('⚠️ Auth loading timed out after 5s, forcing loading to false')
-        setLoading(false)
-      }
-    }, 5000)
+    let mounted = true
+    let safetyTimeoutId: NodeJS.Timeout | null = null
+    
+    console.log('🔄 AdminAuthProvider useEffect running')
+    initializingRef.current = true
 
     const initAuth = async () => {
       try {
         console.log('⏳ Initializing auth...')
-        const { data: { session }, error } = await supabase.auth.getSession()
+        
+        // Timeout de seguridad para evitar carga infinita (8 segundos)
+        safetyTimeoutId = setTimeout(() => {
+          if (mounted && loading) {
+            console.warn('⚠️ Auth loading timed out after 8s, forcing loading to false')
+            setLoading(false)
+          }
+        }, 8000)
+        
+        let session = null
+        let error = null
+        
+        try {
+          // Agregar timeout a getSession (incrementado a 6s para primera carga)
+          const sessionQuery = supabase.auth.getSession()
+          const result = await withTimeout(
+            sessionQuery,
+            6000,
+            'getSession timeout after 6s'
+          )
+          session = result.data?.session
+          error = result.error
+          
+          console.log('✅ getSession completado:', { hasSession: !!session, userId: session?.user?.id })
+        } catch (timeoutErr: any) {
+          console.error('⚠️ getSession timeout:', timeoutErr.message)
+          console.warn('⚠️ Timeout en getSession, asumiendo sin sesión...')
+          // Tratar como si no hubiera sesión
+          if (mounted) {
+            if (!pathname?.includes('/login') && !pathname?.includes('/auth/') && !pathname?.includes('/set-password')) {
+              console.log('➡️ Redirigiendo a login debido a timeout')
+              router.push('/admin/login')
+            }
+            setLoading(false)
+          }
+          return
+        }
         
         if (error) {
            console.error('❌ Error getting session:', error)
@@ -361,7 +454,10 @@ export function AdminAuthProvider({ children }: { children: React.ReactNode }) {
             }
           } else if (!pathname?.includes('/login') && !pathname?.includes('/auth/') && !pathname?.includes('/set-password')) {
             console.log('❌ No session found, redirecting to login')
+            setLoading(false)
             router.push('/admin/login')
+          } else {
+            setLoading(false)
           }
         }
       } catch (err: any) {
@@ -369,10 +465,15 @@ export function AdminAuthProvider({ children }: { children: React.ReactNode }) {
         if (!pathname?.includes('/login') && !pathname?.includes('/set-password')) {
            router.push('/admin/login')
         }
+        setLoading(false)
       } finally {
         if (mounted) {
-          setLoading(false)
           console.log('✅ Loading complete (initAuth)')
+          // Limpiar timeout de seguridad
+          if (safetyTimeoutId) {
+            clearTimeout(safetyTimeoutId)
+            safetyTimeoutId = null
+          }
         }
       }
     }
@@ -393,21 +494,26 @@ export function AdminAuthProvider({ children }: { children: React.ReactNode }) {
           if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION') {
             if (needsContextRefresh) {
               try {
+                console.log('🔍 Fetching user context for auth state change...')
                 await fetchUserContext(session.user.id)
+                console.log('✅ User context fetched successfully')
                 setLoading(false)
-              } catch (err) {
-                console.error('Error fetching user context on auth change:', err)
+              } catch (err: any) {
+                console.error('❌ Error fetching user context on auth change:', err.message)
                 setLoading(false)
               }
             } else {
+              console.log('⏭️ Skipping context refresh (already have data)')
               setLoading(false)
             }
           } else if (event === 'TOKEN_REFRESHED') {
+            console.log('🔄 Token refreshed')
             setLoading(false)
           } else {
             setLoading(false)
           }
         } else {
+          console.log('🔄 No session in auth state change')
           setUser(null)
           setUserRoles([])
           setActiveRole(null)
@@ -416,22 +522,27 @@ export function AdminAuthProvider({ children }: { children: React.ReactNode }) {
           setAssignedAgentId(null)
           setAgentId(null)
           lastFetchedUserIdRef.current = null
+          setLoading(false)
           if (event === 'SIGNED_OUT' && !pathname?.includes('/login') && !pathname?.includes('/set-password')) {
              router.push('/admin/login')
           }
         }
-      } catch (err) {
-        console.error('Error in auth state change handler:', err)
+      } catch (err: any) {
+        console.error('❌ Error in auth state change handler:', err.message)
+        setLoading(false)
       } finally {
         if (mounted) {
-          setLoading(false)
+          console.log('✅ Auth state change handled')
         }
       }
     })
 
     return () => {
       mounted = false
-      clearTimeout(safetyTimeout)
+      initializingRef.current = false
+      if (safetyTimeoutId) {
+        clearTimeout(safetyTimeoutId)
+      }
       subscription.unsubscribe()
     }
   }, [supabase, router, pathname])

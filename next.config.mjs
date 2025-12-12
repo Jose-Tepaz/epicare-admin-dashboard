@@ -1,5 +1,6 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  reactStrictMode: false, // Deshabilitado temporalmente para evitar doble ejecución de effects
   typescript: {
     ignoreBuildErrors: true,
   },

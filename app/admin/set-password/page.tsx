@@ -192,7 +192,7 @@ function SetPasswordForm() {
     }
 
     setupSession()
-  }, [user, authLoading, router, processingHash, hasProcessedHash, searchParams])
+  }, [user, authLoading, router, processingHash, hasProcessedHash, searchParams, allowAccessWithoutUser])
 
   const validateForm = () => {
     const newErrors: Record<string, string> = {}
