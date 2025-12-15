@@ -350,6 +350,7 @@ export default function UserDetailsPage() {
           {/* Sidebar */}
           <div className="space-y-6">
             {/* Roles */}
+            {user?.role !== 'client' && (
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
@@ -446,6 +447,7 @@ export default function UserDetailsPage() {
                 )}
               </CardContent>
             </Card>
+            )}
 
             {/* Stats */}
             {user.role === 'client' && (
