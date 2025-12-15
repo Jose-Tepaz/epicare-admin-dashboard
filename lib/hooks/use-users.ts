@@ -519,6 +519,7 @@ export function useCreateUser() {
     city?: string
     zipcode?: string
     role: string // ✅ Ahora espera el nombre del rol directamente
+    agent_profile_id?: string // ID del agente a asignar (opcional)
   }) => {
     try {
       setCreating(true)
