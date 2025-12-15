@@ -34,13 +34,17 @@ export function NewUserModal({ open, onOpenChange, onSuccess }: NewUserModalProp
   const { createUser, creating } = useCreateUser()
   const { roles: availableRoles, loading: rolesLoading } = useAvailableRoles()
   const { isSuperAdmin, isAgent, user, activeRole, agentId } = useAdminAuth()
-  const { agents, loading: agentsLoading, getAgentDisplayName, getDefaultAgent } = useAgents()
+  const { agents, loading: agentsLoading, error: agentsError, getAgentDisplayName, getDefaultAgent } = useAgents()
 
   // Filtrar roles según permisos:
   // - super_admin puede asignar cualquier rol
   // - admin puede asignar todos excepto admin y super_admin
   // - agent solo puede asignar client y support_staff
   const filteredRoles = availableRoles.filter(role => {
+    // Asegurarse de que el rol tenga un nombre válido (no vacío)
+    if (!role.name || role.name.trim() === '') {
+      return false
+    }
     if (role.name === 'admin' || role.name === 'super_admin') {
       return isSuperAdmin
     }
@@ -111,6 +115,10 @@ export function NewUserModal({ open, onOpenChange, onSuccess }: NewUserModalProp
 
     // Si es un agente creando un cliente, asignar automáticamente su agentId
     let agentProfileId = formData.agent_profile_id || undefined
+    // Convertir "default" a undefined para usar el agente por defecto
+    if (agentProfileId === "default") {
+      agentProfileId = undefined
+    }
     if (isAgent && formData.role === 'client' && agentId) {
       agentProfileId = agentId
     }
@@ -162,7 +170,7 @@ export function NewUserModal({ open, onOpenChange, onSuccess }: NewUserModalProp
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[500px]">
+      <DialogContent className="sm:max-w-[500px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>
             {isAgent ? "Registrar Nuevo Cliente/Staff" : "Registrar Nuevo Usuario"}
@@ -319,17 +327,17 @@ export function NewUserModal({ open, onOpenChange, onSuccess }: NewUserModalProp
                 <Info className="h-4 w-4 text-muted-foreground" />
               </Label>
               <Select 
-                value={formData.agent_profile_id} 
-                onValueChange={(value) => handleChange("agent_profile_id", value)}
-                disabled={agentsLoading || creating}
+                value={formData.agent_profile_id || "default"} 
+                onValueChange={(value) => handleChange("agent_profile_id", value === "default" ? "" : value)}
+                disabled={agentsLoading || creating || agents.length === 0}
               >
                 <SelectTrigger id="agent_profile_id">
-                  <SelectValue placeholder="Agente por defecto" />
+                  <SelectValue placeholder={agentsLoading ? "Cargando agentes..." : agents.length === 0 ? "No hay agentes disponibles" : "Agente por defecto"} />
                 </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="">
+                <SelectContent className="z-[100]">
+                  <SelectItem value="default">
                     <span className="flex items-center gap-2">
-                      Agente por defecto
+                      Agente principal
                       {getDefaultAgent() && (
                         <span className="text-xs text-muted-foreground">
                           ({getAgentDisplayName(getDefaultAgent()!)})
@@ -342,17 +350,37 @@ export function NewUserModal({ open, onOpenChange, onSuccess }: NewUserModalProp
                       <span className="flex items-center gap-2">
                         {getAgentDisplayName(agent)}
                         {agent.is_default && (
-                          <span className="text-xs text-muted-foreground">(Default)</span>
+                          <span className="text-xs text-muted-foreground">(Principal)</span>
                         )}
                       </span>
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
-              <p className="text-xs text-muted-foreground flex items-start gap-1">
-                <Info className="h-3 w-3 mt-0.5 flex-shrink-0" />
-                Si no seleccionas un agente, se asignará automáticamente el agente por defecto de la plataforma
-              </p>
+              {agentsLoading && (
+                <p className="text-xs text-muted-foreground flex items-start gap-1">
+                  <Loader2 className="h-3 w-3 mt-0.5 flex-shrink-0 animate-spin" />
+                  Cargando lista de agentes...
+                </p>
+              )}
+              {!agentsLoading && agents.length === 0 && (
+                <p className="text-xs text-yellow-600 flex items-start gap-1">
+                  <Info className="h-3 w-3 mt-0.5 flex-shrink-0" />
+                  No hay agentes disponibles en el sistema
+                </p>
+              )}
+              {!agentsLoading && agents.length > 0 && (
+                <p className="text-xs text-muted-foreground flex items-start gap-1">
+                  <Info className="h-3 w-3 mt-0.5 flex-shrink-0" />
+                  Si no seleccionas un agente, se asignará automáticamente el agente por defecto de la plataforma
+                </p>
+              )}
+              {agentsError && (
+                <p className="text-xs text-red-500 flex items-start gap-1">
+                  <Info className="h-3 w-3 mt-0.5 flex-shrink-0" />
+                  Error al cargar agentes: {agentsError}
+                </p>
+              )}
             </div>
           )}
 

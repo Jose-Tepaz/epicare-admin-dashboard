@@ -300,6 +300,7 @@ export default function UserDetailsPage() {
             </Card>
 
             {/* Applications History */}
+            {user.role === 'client' && (
             <Card>
               <CardHeader>
                 <CardTitle>Historial de Applications ({user.applications?.length || 0})</CardTitle>
@@ -343,6 +344,7 @@ export default function UserDetailsPage() {
                 )}
               </CardContent>
             </Card>
+            )}
           </div>
 
           {/* Sidebar */}
@@ -446,6 +448,7 @@ export default function UserDetailsPage() {
             </Card>
 
             {/* Stats */}
+            {user.role === 'client' && (
             <Card>
               <CardHeader>
                 <CardTitle>Estadísticas</CardTitle>
@@ -463,6 +466,7 @@ export default function UserDetailsPage() {
                 </div>
               </CardContent>
             </Card>
+            )}
           </div>
         </div>
       </div>
