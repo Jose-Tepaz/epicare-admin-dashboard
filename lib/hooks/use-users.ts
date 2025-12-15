@@ -203,7 +203,16 @@ export function useUserDetails(userId: string | null) {
       setError(null)
       const supabase = createClient()
 
-      // Obtener usuario (✅ role ya viene en el select '*')
+      // Obtener usuario desde la vista users_with_role_switching que tiene toda la información de roles
+      const { data: userViewData, error: viewError } = await supabase
+        .from('users_with_role_switching')
+        .select('*')
+        .eq('id', userId)
+        .single()
+
+      if (viewError) throw viewError
+
+      // También obtener los datos completos del usuario desde users para tener todos los campos
       const { data: userData, error: userError } = await supabase
         .from('users')
         .select('*')
@@ -211,6 +220,20 @@ export function useUserDetails(userId: string | null) {
         .single()
 
       if (userError) throw userError
+
+      // Obtener los user_roles con sus IDs para poder eliminarlos
+      const { data: userRolesData, error: rolesError } = await supabase
+        .from('user_roles')
+        .select(`
+          id,
+          role_id,
+          roles:role_id (
+            id,
+            name,
+            description
+          )
+        `)
+        .eq('user_id', userId)
 
       // Obtener applications
       const { data: applications } = await supabase
@@ -226,14 +249,96 @@ export function useUserDetails(userId: string | null) {
         .eq('user_id', userId)
         .order('created_at', { ascending: false })
 
+      // Construir el array de roles usando la información de la vista
+      const primaryRoleName = (userViewData.primary_role || userData.role || '').trim()
+      const primaryRoleNameLower = primaryRoleName.toLowerCase()
+      
+      // available_roles puede venir como array de PostgreSQL, asegurarse de que sea un array
+      let availableRoles: string[] = []
+      if (userViewData.available_roles) {
+        if (Array.isArray(userViewData.available_roles)) {
+          availableRoles = userViewData.available_roles
+        } else if (typeof userViewData.available_roles === 'string') {
+          // Si viene como string, intentar parsearlo
+          try {
+            availableRoles = JSON.parse(userViewData.available_roles)
+          } catch {
+            availableRoles = [userViewData.available_roles]
+          }
+        }
+      }
+      
+      // Si no hay available_roles, usar solo el rol principal
+      if (availableRoles.length === 0 && primaryRoleName) {
+        availableRoles = [primaryRoleName]
+      }
+      
+      // Asegurarse de que el rol principal esté en available_roles
+      if (primaryRoleName && !availableRoles.some(r => r.toLowerCase() === primaryRoleNameLower)) {
+        availableRoles.unshift(primaryRoleName) // Agregar al inicio
+      }
+
+      const allRoles: any[] = []
+
+      // Crear un mapa de user_role_id por nombre de rol para poder eliminar roles adicionales
+      const roleIdMap = new Map<string, string>()
+      if (userRolesData && !rolesError) {
+        userRolesData.forEach((ur: any) => {
+          if (ur.roles) {
+            roleIdMap.set(ur.roles.name.toLowerCase().trim(), ur.id)
+          }
+        })
+      }
+
+      // Procesar cada rol disponible
+      availableRoles.forEach((roleName: string) => {
+        const roleNameTrimmed = roleName.trim()
+        const roleNameLower = roleNameTrimmed.toLowerCase()
+        const isPrimary = roleNameLower === primaryRoleNameLower
+        const userRoleId = roleIdMap.get(roleNameLower)
+
+        if (isPrimary) {
+          // Es el rol principal (viene de users.role)
+          allRoles.push({
+            id: `primary-${primaryRoleNameLower}`,
+            name: primaryRoleName, // Usar el nombre exacto del primary_role
+            description: null,
+            is_primary: true,
+            user_role_id: null, // El rol principal NO tiene user_role_id
+            primary_role: true,
+            from_users_table: true
+          })
+        } else {
+          // Es un rol adicional (viene de user_roles)
+          allRoles.push({
+            id: userRoleId || `role-${roleNameLower}`,
+            name: roleNameTrimmed,
+            description: null,
+            is_primary: false,
+            primary_role: false,
+            from_users_table: false,
+            user_role_id: userRoleId || undefined // Los roles adicionales SÍ tienen user_role_id
+          })
+        }
+      })
+
+      // Asegurarse de que el rol principal siempre esté primero
+      const sortedRoles = allRoles.sort((a, b) => {
+        if (a.is_primary && !b.is_primary) return -1
+        if (!a.is_primary && b.is_primary) return 1
+        return a.name.localeCompare(b.name)
+      })
+      
+      // Log para debugging (remover en producción si es necesario)
+      console.log('🔍 User roles debug:', {
+        primaryRoleName,
+        availableRoles,
+        sortedRoles: sortedRoles.map(r => ({ name: r.name, is_primary: r.is_primary, user_role_id: r.user_role_id }))
+      })
+
       setUser({
         ...userData,
-        // ✅ Convertir role string a array para compatibilidad
-        roles: userData.role ? [{ 
-          id: userData.role, 
-          name: userData.role, 
-          description: null 
-        }] : [],
+        roles: sortedRoles,
         applications: applications || [],
       })
     } catch (err) {
@@ -258,6 +363,44 @@ export function useAssignRole() {
       setAssigning(true)
       const supabase = createClient()
 
+      // Obtener el nombre del rol para determinar si usar la API especial
+      const { data: roleData, error: roleError } = await supabase
+        .from('roles')
+        .select('id, name')
+        .eq('id', roleId)
+        .single()
+
+      if (roleError || !roleData) {
+        toast.error('Error al obtener información del rol')
+        return false
+      }
+
+      const roleName = roleData.name
+
+      // Si el rol es 'agent', usar la API route especial que maneja agent_profile
+      if (roleName === 'agent') {
+        const response = await fetch(`/api/users/${userId}/assign-role`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ roleId }),
+        })
+
+        const data = await response.json()
+
+        if (!response.ok) {
+          throw new Error(data.error || 'Error al asignar el rol')
+        }
+
+        toast.success(data.message || 'Rol asignado correctamente')
+        if (data.warning) {
+          toast.warning(data.warning)
+        }
+        return true
+      }
+
+      // Para otros roles, usar la lógica anterior (insertar directamente)
       // Verificar si el usuario ya tiene ese rol
       const { data: existing } = await supabase
         .from('user_roles')
@@ -281,7 +424,8 @@ export function useAssignRole() {
       return true
     } catch (err) {
       console.error('Error assigning role:', err)
-      toast.error('Error al asignar el rol')
+      const errorMessage = err instanceof Error ? err.message : 'Error al asignar el rol'
+      toast.error(errorMessage)
       return false
     } finally {
       setAssigning(false)

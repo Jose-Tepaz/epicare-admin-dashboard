@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useMemo } from "react"
 import { useRouter, useParams } from "next/navigation"
 import { AdminLayout } from "@/components/admin-layout"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -30,6 +30,7 @@ import { useAdminAuth } from "@/contexts/admin-auth-context"
 import { format } from "date-fns"
 import { es } from "date-fns/locale"
 import Link from "next/link"
+import { toast } from "sonner"
 
 const statusConfig = {
   draft: { label: "Draft", icon: FileText, color: "bg-gray-100 text-gray-800" },
@@ -50,7 +51,7 @@ export default function UserDetailsPage() {
   const { assignRole, assigning } = useAssignRole()
   const { removeRole, removing } = useRemoveRole()
   const { roles: availableRoles } = useAvailableRoles()
-  const { permissions } = useAdminAuth()
+  const { permissions, isSuperAdmin } = useAdminAuth()
 
   const [isEditing, setIsEditing] = useState(false)
   const [editedUser, setEditedUser] = useState({
@@ -59,6 +60,23 @@ export default function UserDetailsPage() {
     phone: "",
   })
   const [selectedRole, setSelectedRole] = useState("")
+
+  // Filtrar roles disponibles según el rol principal del usuario objetivo
+  // Si el usuario es super_admin o admin, solo mostrar el rol 'agent'
+  // IMPORTANTE: Este hook debe estar antes de cualquier return condicional
+  const filteredRoles = useMemo(() => {
+    if (!user || !availableRoles) return []
+    
+    const userRole = user.role || ''
+    
+    // Si el usuario objetivo es super_admin o admin, solo mostrar 'agent'
+    if (userRole === 'super_admin' || userRole === 'admin') {
+      return availableRoles.filter(role => role.name === 'agent')
+    }
+    
+    // Para otros usuarios, mostrar todos los roles disponibles
+    return availableRoles
+  }, [user, availableRoles])
 
   if (loading) {
     return (
@@ -112,7 +130,31 @@ export default function UserDetailsPage() {
   }
 
   const handleAssignRole = async () => {
-    if (!selectedRole) return
+    if (!selectedRole) {
+      toast.error('Por favor selecciona un rol')
+      return
+    }
+
+    // Validar que el usuario actual es super_admin
+    if (!isSuperAdmin) {
+      toast.error('Solo los super administradores pueden agregar el rol de agente a otros usuarios')
+      return
+    }
+
+    // Validar que el usuario objetivo es super_admin o admin
+    const targetUserRole = user?.role || ''
+    if (targetUserRole !== 'super_admin' && targetUserRole !== 'admin') {
+      toast.error('Solo se puede agregar el rol de agente a usuarios con rol super_admin o admin')
+      return
+    }
+
+    // Obtener el nombre del rol seleccionado para validación adicional
+    const selectedRoleData = availableRoles.find(r => r.id === selectedRole)
+    if (selectedRoleData?.name !== 'agent') {
+      toast.error('Solo se puede agregar el rol de agente mediante esta funcionalidad')
+      return
+    }
+
     const success = await assignRole(user.id, selectedRole)
     if (success) {
       setSelectedRole("")
@@ -316,21 +358,40 @@ export default function UserDetailsPage() {
               <CardContent className="space-y-4">
                 <div className="space-y-2">
                   {user.roles && user.roles.length > 0 ? (
-                    user.roles.map((role: any) => (
-                      <div key={role.id} className="flex items-center justify-between p-2 border rounded">
-                        <Badge variant="default">{role.name}</Badge>
-                        {permissions.canAssignRoles && (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleRemoveRole(role.user_role_id)}
-                            disabled={removing}
-                          >
-                            <X className="h-3 w-3" />
-                          </Button>
-                        )}
-                      </div>
-                    ))
+                    user.roles.map((role: any, index: number) => {
+                      // Usar una key única combinando id y user_role_id si existe
+                      const uniqueKey = role.user_role_id ? `${role.id}-${role.user_role_id}` : `${role.id}-primary-${index}`
+                      
+                      // CRÍTICO: El rol principal es el que viene de users.role
+                      // Identificarlo por: from_users_table === true O user_role_id === null
+                      const isPrimary = role.from_users_table === true || role.user_role_id === null
+                      
+                      return (
+                        <div key={uniqueKey} className="flex items-center justify-between p-2 border rounded">
+                          <div className="flex items-center gap-2">
+                            <Badge variant="default">{role.name}</Badge>
+                            {isPrimary && (
+                              <Badge variant="outline" className="text-xs">
+                                Principal
+                              </Badge>
+                            )}
+                          </div>
+                          {/* Solo mostrar botón de eliminar si NO es el rol principal Y tiene user_role_id */}
+                          {/* El rol principal NO debe tener botón de eliminar */}
+                          {permissions.canAssignRoles && !isPrimary && role.user_role_id !== null && role.user_role_id !== undefined && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleRemoveRole(role.user_role_id)}
+                              disabled={removing}
+                              title="Eliminar rol"
+                            >
+                              <X className="h-3 w-3" />
+                            </Button>
+                          )}
+                        </div>
+                      )
+                    })
                   ) : (
                     <p className="text-sm text-gray-500">Sin roles asignados</p>
                   )}
@@ -339,36 +400,46 @@ export default function UserDetailsPage() {
                 {permissions.canAssignRoles && (
                   <div className="pt-4 border-t space-y-2">
                     <Label>Asignar Nuevo Rol</Label>
-                    <Select value={selectedRole} onValueChange={setSelectedRole}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Seleccionar rol" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {availableRoles.map((role) => (
-                          <SelectItem key={role.id} value={role.id}>
-                            {role.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <Button
-                      onClick={handleAssignRole}
-                      disabled={assigning || !selectedRole}
-                      className="w-full"
-                      size="sm"
-                    >
-                      {assigning ? (
-                        <>
-                          <Loader2 className="h-3 w-3 mr-2 animate-spin" />
-                          Asignando...
-                        </>
-                      ) : (
-                        <>
-                          <Plus className="h-3 w-3 mr-2" />
-                          Asignar Rol
-                        </>
-                      )}
-                    </Button>
+                    {filteredRoles.length > 0 ? (
+                      <>
+                        <Select value={selectedRole} onValueChange={setSelectedRole}>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Seleccionar rol" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {filteredRoles.map((role) => (
+                              <SelectItem key={role.id} value={role.id}>
+                                {role.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <Button
+                          onClick={handleAssignRole}
+                          disabled={assigning || !selectedRole}
+                          className="w-full"
+                          size="sm"
+                        >
+                          {assigning ? (
+                            <>
+                              <Loader2 className="h-3 w-3 mr-2 animate-spin" />
+                              Asignando...
+                            </>
+                          ) : (
+                            <>
+                              <Plus className="h-3 w-3 mr-2" />
+                              Asignar Rol
+                            </>
+                          )}
+                        </Button>
+                      </>
+                    ) : (
+                      <p className="text-sm text-gray-500">
+                        {user?.role === 'super_admin' || user?.role === 'admin' 
+                          ? 'Solo se puede agregar el rol de agente a usuarios con rol super_admin o admin'
+                          : 'No hay roles disponibles para asignar'}
+                      </p>
+                    )}
                   </div>
                 )}
               </CardContent>

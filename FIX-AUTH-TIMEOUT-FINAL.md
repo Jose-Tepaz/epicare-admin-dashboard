@@ -311,3 +311,4 @@ Y asegurarse de que el código maneja correctamente las ejecuciones duplicadas.
 - [ ] Probar con conexión lenta
 - [ ] Re-habilitar Strict Mode cuando todo funcione
 
+

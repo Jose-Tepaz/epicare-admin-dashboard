@@ -177,3 +177,4 @@ Los nuevos logs permitirán identificar:
 - Cuánto tiempo tarda cada query
 - Si el problema es de conexión o de RLS/permisos
 
+
