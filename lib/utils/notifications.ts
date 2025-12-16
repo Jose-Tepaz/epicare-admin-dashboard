@@ -60,7 +60,7 @@ async function getNotificationRecipients(clientId: string): Promise<{
   // Obtener información del cliente
   const { data: client, error: clientError } = await supabase
     .from('users')
-    .select('agent_id')
+    .select('agent_profile_id')
     .eq('id', clientId)
     .single()
 
@@ -202,7 +202,16 @@ export async function createTicketNotification(
   type: 'new' | 'reply',
   ticketNumber?: string
 ): Promise<void> {
+  console.log(`[createTicketNotification] Creating ${type} notification for ticket ${ticketId}, client ${clientId}`)
+  
   const recipients = await getNotificationRecipients(clientId)
+  
+  console.log(`[createTicketNotification] Recipients:`, {
+    superAdminCount: recipients.superAdminIds.length,
+    adminCount: recipients.adminIds.length,
+    supportStaffCount: recipients.supportStaffIds.length,
+    agentId: recipients.agentId,
+  })
 
   // Obtener información del cliente para el mensaje
   const supabase = createAdminClient()
@@ -244,21 +253,37 @@ export async function createTicketNotification(
   }
 
   // Notificar a todos los super_admin
+  console.log(`[createTicketNotification] Notifying ${recipients.superAdminIds.length} super_admins`)
   recipients.superAdminIds.forEach((userId) => {
+    console.log(`[createTicketNotification] Creating notification for super_admin: ${userId}`)
     promises.push(createNotification(userId, 'support', title, message, linkUrl, metadata))
   })
 
   // Notificar a todos los admin
+  console.log(`[createTicketNotification] Notifying ${recipients.adminIds.length} admins`)
   recipients.adminIds.forEach((userId) => {
+    console.log(`[createTicketNotification] Creating notification for admin: ${userId}`)
     promises.push(createNotification(userId, 'support', title, message, linkUrl, metadata))
   })
 
   // Notificar a support_staff relevantes
+  console.log(`[createTicketNotification] Notifying ${recipients.supportStaffIds.length} support_staff`)
   recipients.supportStaffIds.forEach((userId) => {
+    console.log(`[createTicketNotification] Creating notification for support_staff: ${userId}`)
     promises.push(createNotification(userId, 'support', title, message, linkUrl, metadata))
   })
 
-  await Promise.allSettled(promises)
+  console.log(`[createTicketNotification] Waiting for ${promises.length} notification promises to complete`)
+  const results = await Promise.allSettled(promises)
+  
+  const succeeded = results.filter(r => r.status === 'fulfilled').length
+  const failed = results.filter(r => r.status === 'rejected').length
+  
+  console.log(`[createTicketNotification] Completed: ${succeeded} succeeded, ${failed} failed`)
+  
+  if (failed > 0) {
+    console.error(`[createTicketNotification] Some notifications failed:`, results.filter(r => r.status === 'rejected'))
+  }
 }
 
 /**

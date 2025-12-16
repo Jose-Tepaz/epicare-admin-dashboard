@@ -186,8 +186,12 @@ function NotificationItem({ notification, onMarkAsRead, onClose }: NotificationI
   return content
 }
 
-export function NotificationsDropdown() {
-  const { notifications, unreadCount, loading, error, markAsRead, markAllAsRead } = useNotifications()
+interface NotificationsDropdownProps {
+  notificationsData: ReturnType<typeof useNotifications>
+}
+
+export function NotificationsDropdown({ notificationsData }: NotificationsDropdownProps) {
+  const { notifications, unreadCount, loading, error, markAsRead, markAllAsRead } = notificationsData
   const [markingAllAsRead, setMarkingAllAsRead] = useState(false)
   const [open, setOpen] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
@@ -224,15 +228,31 @@ export function NotificationsDropdown() {
     }
   }, [open])
 
-  const handleMarkAllAsRead = useCallback(async () => {
-    if (unreadCount === 0 || markingAllAsRead) return
+  const handleMarkAllAsRead = useCallback(async (e?: React.MouseEvent) => {
+    console.log('🔵 handleMarkAllAsRead called')
+    console.log('🔵 unreadCount:', unreadCount)
+    console.log('🔵 markingAllAsRead:', markingAllAsRead)
+    
+    // Prevenir propagación del evento
+    if (e) {
+      e.preventDefault()
+      e.stopPropagation()
+    }
+    
+    if (unreadCount === 0 || markingAllAsRead) {
+      console.log('⚠️ Skipping: no unread or already marking')
+      return
+    }
 
+    console.log('📝 Starting to mark all as read...')
     setMarkingAllAsRead(true)
     const success = await markAllAsRead()
     setMarkingAllAsRead(false)
 
     if (!success) {
-      console.error('Error marking all notifications as read')
+      console.error('❌ Error marking all notifications as read')
+    } else {
+      console.log('✅ All notifications marked as read')
     }
   }, [unreadCount, markAllAsRead, markingAllAsRead])
 
@@ -267,7 +287,10 @@ export function NotificationsDropdown() {
                   variant="ghost"
                   size="sm"
                   className="h-7 text-xs"
-                  onClick={handleMarkAllAsRead}
+                  onClick={(e) => {
+                    console.log('🖱️ Button clicked')
+                    handleMarkAllAsRead(e)
+                  }}
                   disabled={markingAllAsRead}
                 >
                   {markingAllAsRead ? (

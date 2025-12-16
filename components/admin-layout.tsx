@@ -10,6 +10,7 @@ import Link from "next/link"
 import { useAdminAuth } from "@/contexts/admin-auth-context"
 import { NotificationsDropdown } from "@/components/notifications-dropdown"
 import { RoleSwitcher } from "@/components/role-switcher"
+import { useNotifications } from "@/lib/hooks/use-notifications"
 
 const adminNavigationItems = [
   { name: "Dashboard", href: "/admin", icon: BarChart3, active: false },
@@ -27,6 +28,9 @@ interface AdminLayoutProps {
 export function AdminLayout({ children, currentPage = "Dashboard" }: AdminLayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const { user, signOut } = useAdminAuth()
+  
+  // Hook de notificaciones a nivel de layout para evitar múltiples suscripciones
+  const notificationsData = useNotifications()
 
   const getInitials = (email: string | undefined | null) => {
     if (!email) return 'U'
@@ -138,7 +142,7 @@ export function AdminLayout({ children, currentPage = "Dashboard" }: AdminLayout
           <span className="font-medium text-gray-900">Admin Panel</span>
           <div className="flex items-center gap-2">
             <RoleSwitcher variant="header" />
-            <NotificationsDropdown />
+            <NotificationsDropdown notificationsData={notificationsData} />
           </div>
         </div>
 
@@ -149,7 +153,7 @@ export function AdminLayout({ children, currentPage = "Dashboard" }: AdminLayout
             <span className="text-sm text-gray-500">Internal Management System</span>
           </div>
           <div className="flex items-center gap-3">
-            <NotificationsDropdown />
+            <NotificationsDropdown notificationsData={notificationsData} />
             {user && (
               <div className="flex items-center gap-3">
                 <div className="w-8 h-8 bg-orange-500 rounded-full flex items-center justify-center">
