@@ -31,6 +31,7 @@ import { format } from "date-fns"
 import { es } from "date-fns/locale"
 import Link from "next/link"
 import { toast } from "sonner"
+import { AgentDetailView } from "@/components/agent-detail-view"
 
 const statusConfig = {
   draft: { label: "Draft", icon: FileText, color: "bg-gray-100 text-gray-800" },
@@ -344,6 +345,11 @@ export default function UserDetailsPage() {
                 )}
               </CardContent>
             </Card>
+            )}
+
+            {/* Agent Detail View - Solo si el usuario tiene rol de agente */}
+            {user.roles?.some((role: any) => role.name === 'agent') && (
+              <AgentDetailView userId={user.id} />
             )}
           </div>
 

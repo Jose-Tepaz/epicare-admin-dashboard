@@ -27,7 +27,7 @@ export function useUsers(
   filters: UserFilters = {},
   pagination: PaginationParams = { page: 1, pageSize: 25 }
 ) {
-  const { user, loading: authLoading } = useAdminAuth()
+  const { user, loading: authLoading, isAgent, agentId, activeRole } = useAdminAuth()
   const [users, setUsers] = useState<UserWithStats[]>([])
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(true)
@@ -44,54 +44,190 @@ export function useUsers(
       return
     }
 
+    // Si es agente pero agentId aún no está disponible, esperar un poco más
+    // Esto maneja el race condition donde el contexto aún está cargando agentId
+    const isActuallyAgent = activeRole === 'agent'
+    
     try {
       setLoading(true)
       setError(null)
       const supabase = createClient()
 
-      console.log('🔄 Fetching users with filters:', { roleKey, search: filters.search, page: pagination.page })
+      console.log('🔄 Fetching users with filters:', { 
+        roleKey, 
+        search: filters.search, 
+        page: pagination.page, 
+        isAgent, 
+        agentId,
+        activeRole,
+        isActuallyAgent
+      })
 
-      // Obtener usuarios
-      let query = supabase
-        .from('users')
-        .select(`
-          id,
-          email,
-          first_name,
-          last_name,
-          phone,
-          role,
-          created_at,
-          profile_completed,
-          password_set
-        `, { count: 'exact' })
+      let usersData: any[] = []
+      let count = 0
 
-      // Aplicar filtros de fecha
-      if (filters.startDate) {
-        query = query.gte('created_at', filters.startDate)
+      // Si el usuario actual es un agente, incluir también clientes secundarios de agent_clients
+      // Usar activeRole para detectar si es agente (más confiable que isAgent durante carga inicial)
+      console.log('🔍 Checking agent condition:', { isAgent, agentId, activeRole, isActuallyAgent, user: user?.id })
+      
+      // Si es agente pero agentId no está disponible aún, obtenerlo ahora
+      let finalAgentId = agentId
+      if (isActuallyAgent && !finalAgentId) {
+        console.log('⚠️ Agent detected but agentId not available, fetching it now...')
+        const { data: agentProfile } = await supabase
+          .from('agent_profiles')
+          .select('id')
+          .eq('user_id', user.id)
+          .single()
+        
+        if (agentProfile) {
+          finalAgentId = agentProfile.id
+          console.log('✅ Agent ID fetched:', finalAgentId)
+        }
+      }
+      
+      if (isActuallyAgent && finalAgentId) {
+        console.log('✅ Agent viewing users - using API endpoint to bypass RLS', { agentId: finalAgentId })
+        
+        // Usar el endpoint de API que bypass RLS en lugar de queries directas
+        try {
+          const response = await fetch(`/api/agent-clients?agent_profile_id=${finalAgentId}`)
+          if (!response.ok) {
+            throw new Error(`API error: ${response.statusText}`)
+          }
+          
+          const apiData = await response.json()
+          console.log('🔍 API response:', apiData)
+          
+          if (apiData.data && Array.isArray(apiData.data)) {
+            // El endpoint devuelve relaciones con datos del cliente dentro de relation.client
+            // Extraer los datos de los clientes y eliminar duplicados
+            const clientMap = new Map<string, any>()
+            
+            apiData.data.forEach((relation: any) => {
+              if (relation.client) {
+                const clientId = relation.client.id
+                if (!clientMap.has(clientId)) {
+                  clientMap.set(clientId, {
+                    id: relation.client.id,
+                    email: relation.client.email,
+                    first_name: relation.client.first_name,
+                    last_name: relation.client.last_name,
+                    phone: relation.client.phone,
+                    role: 'client',
+                    created_at: relation.client.created_at,
+                    profile_completed: relation.client.profile_completed,
+                    password_set: relation.client.password_set,
+                  })
+                }
+              }
+            })
+            
+            usersData = Array.from(clientMap.values())
+            
+            console.log('✅ Clients from API:', usersData.length, usersData.map((u: any) => ({ id: u.id, email: u.email })))
+            
+            // Aplicar filtros de fecha y búsqueda
+            let filteredClients = usersData
+
+            if (filters.startDate) {
+              filteredClients = filteredClients.filter((c: any) => 
+                new Date(c.created_at) >= new Date(filters.startDate!)
+              )
+            }
+
+            if (filters.endDate) {
+              filteredClients = filteredClients.filter((c: any) => 
+                new Date(c.created_at) <= new Date(filters.endDate!)
+              )
+            }
+
+            if (filters.search) {
+              const searchLower = filters.search.toLowerCase()
+              filteredClients = filteredClients.filter((c: any) => 
+                c.email?.toLowerCase().includes(searchLower) ||
+                c.first_name?.toLowerCase().includes(searchLower) ||
+                c.last_name?.toLowerCase().includes(searchLower)
+              )
+            }
+
+            console.log('✅ Filtered clients AFTER filters:', { 
+              total: filteredClients.length,
+              clientEmails: filteredClients.map((u: any) => u.email)
+            })
+
+            usersData = filteredClients
+            count = filteredClients.length
+          } else {
+            console.warn('⚠️ API response format unexpected:', apiData)
+            usersData = []
+            count = 0
+          }
+        } catch (apiError) {
+          console.error('❌ Error fetching clients from API:', apiError)
+          // Fallback a query normal si el API falla
+          throw apiError
+        }
+      } else {
+        // Para admins o usuarios no-agentes, usar query normal
+        let query = supabase
+          .from('users')
+          .select(`
+            id,
+            email,
+            first_name,
+            last_name,
+            phone,
+            role,
+            created_at,
+            profile_completed,
+            password_set
+          `, { count: 'exact' })
+
+        // Aplicar filtros de fecha
+        if (filters.startDate) {
+          query = query.gte('created_at', filters.startDate)
+        }
+
+        if (filters.endDate) {
+          query = query.lte('created_at', filters.endDate)
+        }
+
+        if (filters.search) {
+          query = query.or(`email.ilike.%${filters.search}%,first_name.ilike.%${filters.search}%,last_name.ilike.%${filters.search}%`)
+        }
+
+        // Ordenar y paginar
+        const from = (pagination.page - 1) * pagination.pageSize
+        const to = from + pagination.pageSize - 1
+
+        query = query
+          .order('created_at', { ascending: false })
+          .range(from, to)
+
+        const { data: queryData, error: fetchError, count: queryCount } = await query
+
+        if (fetchError) {
+          console.error('❌ Supabase query error:', fetchError)
+          throw fetchError
+        }
+
+        usersData = queryData || []
+        count = queryCount || 0
       }
 
-      if (filters.endDate) {
-        query = query.lte('created_at', filters.endDate)
-      }
+      // Ordenar por fecha de creación (más recientes primero) si es agente
+      if (isAgent && agentId) {
+        usersData.sort((a: any, b: any) => {
+          const dateA = new Date(a.created_at).getTime()
+          const dateB = new Date(b.created_at).getTime()
+          return dateB - dateA
+        })
 
-      if (filters.search) {
-        query = query.or(`email.ilike.%${filters.search}%,first_name.ilike.%${filters.search}%,last_name.ilike.%${filters.search}%`)
-      }
-
-      // Ordenar y paginar
-      const from = (pagination.page - 1) * pagination.pageSize
-      const to = from + pagination.pageSize - 1
-
-      query = query
-        .order('created_at', { ascending: false })
-        .range(from, to)
-
-      const { data: usersData, error: fetchError, count } = await query
-
-      if (fetchError) {
-        console.error('❌ Supabase query error:', fetchError)
-        throw fetchError
+        // Aplicar paginación manualmente
+        const from = (pagination.page - 1) * pagination.pageSize
+        const to = from + pagination.pageSize
+        usersData = usersData.slice(from, to)
       }
 
       console.log('✅ Users fetched:', usersData?.length || 0, 'users')
@@ -138,6 +274,10 @@ export function useUsers(
         filteredUsers = usersWithDetails.filter(user => 
           user.roles.some((role: { name: string }) => filters.role!.includes(role.name))
         )
+        // Actualizar count si se aplicó filtro de rol
+        if (isActuallyAgent && finalAgentId) {
+          count = filteredUsers.length
+        }
       }
 
       console.log('✅ Setting users:', filteredUsers.length)
@@ -160,7 +300,10 @@ export function useUsers(
     filters.endDate,
     filters.role,
     pagination.page,
-    pagination.pageSize
+    pagination.pageSize,
+    isAgent,
+    agentId,
+    activeRole, // Agregar para detectar cuando el rol cambia
   ])
 
   useEffect(() => {
@@ -257,13 +400,25 @@ export function useUserDetails(userId: string | null) {
       let availableRoles: string[] = []
       if (userViewData.available_roles) {
         if (Array.isArray(userViewData.available_roles)) {
+          // Filtrar valores null/undefined y convertir a string
           availableRoles = userViewData.available_roles
+            .filter((r): r is string => r != null && typeof r === 'string')
+            .map(r => r.trim())
+            .filter(r => r.length > 0)
         } else if (typeof userViewData.available_roles === 'string') {
           // Si viene como string, intentar parsearlo
           try {
-            availableRoles = JSON.parse(userViewData.available_roles)
+            const parsed = JSON.parse(userViewData.available_roles)
+            if (Array.isArray(parsed)) {
+              availableRoles = parsed
+                .filter((r): r is string => r != null && typeof r === 'string')
+                .map(r => r.trim())
+                .filter(r => r.length > 0)
+            } else {
+              availableRoles = [userViewData.available_roles.trim()].filter(r => r.length > 0)
+            }
           } catch {
-            availableRoles = [userViewData.available_roles]
+            availableRoles = [userViewData.available_roles.trim()].filter(r => r.length > 0)
           }
         }
       }
@@ -274,7 +429,8 @@ export function useUserDetails(userId: string | null) {
       }
       
       // Asegurarse de que el rol principal esté en available_roles
-      if (primaryRoleName && !availableRoles.some(r => r.toLowerCase() === primaryRoleNameLower)) {
+      // Validar que primaryRoleName no sea vacío antes de comparar
+      if (primaryRoleName && primaryRoleNameLower && !availableRoles.some(r => r && r.toLowerCase() === primaryRoleNameLower)) {
         availableRoles.unshift(primaryRoleName) // Agregar al inicio
       }
 
@@ -284,15 +440,27 @@ export function useUserDetails(userId: string | null) {
       const roleIdMap = new Map<string, string>()
       if (userRolesData && !rolesError) {
         userRolesData.forEach((ur: any) => {
-          if (ur.roles) {
-            roleIdMap.set(ur.roles.name.toLowerCase().trim(), ur.id)
+          if (ur.roles && ur.roles.name && typeof ur.roles.name === 'string') {
+            const roleName = ur.roles.name.trim()
+            if (roleName.length > 0) {
+              roleIdMap.set(roleName.toLowerCase(), ur.id)
+            }
           }
         })
       }
 
       // Procesar cada rol disponible
       availableRoles.forEach((roleName: string) => {
+        // Validar que roleName no sea null/undefined antes de procesar
+        if (!roleName || typeof roleName !== 'string') {
+          return // Saltar este rol si no es válido
+        }
+        
         const roleNameTrimmed = roleName.trim()
+        if (roleNameTrimmed.length === 0) {
+          return // Saltar si está vacío después de trim
+        }
+        
         const roleNameLower = roleNameTrimmed.toLowerCase()
         const isPrimary = roleNameLower === primaryRoleNameLower
         const userRoleId = roleIdMap.get(roleNameLower)

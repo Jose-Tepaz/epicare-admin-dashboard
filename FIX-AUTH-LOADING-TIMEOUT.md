@@ -178,3 +178,9 @@ Los nuevos logs permitirán identificar:
 - Si el problema es de conexión o de RLS/permisos
 
 
+
+
+
+
+
+

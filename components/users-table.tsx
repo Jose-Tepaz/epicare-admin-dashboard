@@ -148,7 +148,7 @@ export function UsersTable() {
                 <SelectItem value="super_admin">Super Admin</SelectItem>
                 <SelectItem value="admin">Admin</SelectItem>
                 <SelectItem value="support_staff">Support Staff</SelectItem>
-                <SelectItem value="cliente">Cliente</SelectItem>
+                <SelectItem value="client">Cliente</SelectItem>
               </SelectContent>
             </Select>
           </div>

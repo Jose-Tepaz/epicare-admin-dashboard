@@ -29,30 +29,13 @@ export function useAdminStats() {
       const now = new Date()
       const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1)
 
-      // Para agents: obtener sus registration IDs para filtrar applications
-      // La relación es: applications.agent_id → agent_insurance_registrations.id
-      let agentRegistrationIds: string[] = []
-      
-      if (isAgent && agentId) {
-        const { data: registrations } = await supabase
-          .from('agent_insurance_registrations')
-          .select('id')
-          .eq('agent_profile_id', agentId)
-        
-        agentRegistrationIds = registrations?.map(r => r.id) || []
-      } else if (isSupportStaff && userScope === 'agent_specific' && assignedAgentId) {
-        const { data: registrations } = await supabase
-          .from('agent_insurance_registrations')
-          .select('id')
-          .eq('agent_profile_id', assignedAgentId)
-        
-        agentRegistrationIds = registrations?.map(r => r.id) || []
-      }
-
       // Función helper para agregar filtro de agent a queries de applications
+      // Ahora usamos assigned_agent_id que es el agent_profile_id directamente
       const addAgentFilter = (query: any) => {
-        if (agentRegistrationIds.length > 0) {
-          return query.in('agent_id', agentRegistrationIds)
+        if (isAgent && agentId) {
+          return query.eq('assigned_agent_id', agentId)
+        } else if (isSupportStaff && userScope === 'agent_specific' && assignedAgentId) {
+          return query.eq('assigned_agent_id', assignedAgentId)
         }
         return query
       }
@@ -183,25 +166,6 @@ export function useAdminChartData() {
       const sixMonthsAgo = new Date()
       sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6)
 
-      // Para agents: obtener sus registration IDs
-      let agentRegistrationIds: string[] = []
-      
-      if (isAgent && agentId) {
-        const { data: registrations } = await supabase
-          .from('agent_insurance_registrations')
-          .select('id')
-          .eq('agent_profile_id', agentId)
-        
-        agentRegistrationIds = registrations?.map(r => r.id) || []
-      } else if (isSupportStaff && userScope === 'agent_specific' && assignedAgentId) {
-        const { data: registrations } = await supabase
-          .from('agent_insurance_registrations')
-          .select('id')
-          .eq('agent_profile_id', assignedAgentId)
-        
-        agentRegistrationIds = registrations?.map(r => r.id) || []
-      }
-
       // Construir query con filtros según rol
       let query = supabase
         .from('applications')
@@ -209,9 +173,11 @@ export function useAdminChartData() {
         .gte('created_at', sixMonthsAgo.toISOString())
         .order('created_at', { ascending: true })
 
-      // Agregar filtro de agent si corresponde
-      if (agentRegistrationIds.length > 0) {
-        query = query.in('agent_id', agentRegistrationIds)
+      // Agregar filtro de agent si corresponde (usando assigned_agent_id que es el agent_profile_id)
+      if (isAgent && agentId) {
+        query = query.eq('assigned_agent_id', agentId)
+      } else if (isSupportStaff && userScope === 'agent_specific' && assignedAgentId) {
+        query = query.eq('assigned_agent_id', assignedAgentId)
       }
 
       const { data: applications, error: appsError } = await query
@@ -305,26 +271,7 @@ export function useRecentActivity() {
       setError(null)
       const supabase = createClient()
 
-      // Para agents: obtener sus registration IDs
-      let agentRegistrationIds: string[] = []
-      
-      if (isAgent && agentId) {
-        const { data: registrations } = await supabase
-          .from('agent_insurance_registrations')
-          .select('id')
-          .eq('agent_profile_id', agentId)
-        
-        agentRegistrationIds = registrations?.map(r => r.id) || []
-      } else if (isSupportStaff && userScope === 'agent_specific' && assignedAgentId) {
-        const { data: registrations } = await supabase
-          .from('agent_insurance_registrations')
-          .select('id')
-          .eq('agent_profile_id', assignedAgentId)
-        
-        agentRegistrationIds = registrations?.map(r => r.id) || []
-      }
-
-      // Últimas 10 applications (filtradas según rol)
+      // Últimas 10 applications (filtradas según rol usando assigned_agent_id)
       let appsQuery = supabase
         .from('applications')
         .select(`
@@ -336,8 +283,11 @@ export function useRecentActivity() {
         .order('created_at', { ascending: false })
         .limit(10)
       
-      if (agentRegistrationIds.length > 0) {
-        appsQuery = appsQuery.in('agent_id', agentRegistrationIds)
+      // Agregar filtro de agent si corresponde
+      if (isAgent && agentId) {
+        appsQuery = appsQuery.eq('assigned_agent_id', agentId)
+      } else if (isSupportStaff && userScope === 'agent_specific' && assignedAgentId) {
+        appsQuery = appsQuery.eq('assigned_agent_id', assignedAgentId)
       }
 
       const { data: apps, error: appsError } = await appsQuery

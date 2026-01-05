@@ -29,6 +29,7 @@ export function NewUserModal({ open, onOpenChange, onSuccess }: NewUserModalProp
     zipcode: "",
     role: "", // ✅ Cambiado de roleId a role
     agent_profile_id: "", // Nuevo campo para selección de agente
+    unique_link_code: "", // Nuevo campo para link único del agente
   })
   const [errors, setErrors] = useState<Record<string, string>>({})
   const { createUser, creating } = useCreateUser()
@@ -69,10 +70,26 @@ export function NewUserModal({ open, onOpenChange, onSuccess }: NewUserModalProp
         zipcode: "",
         role: "",
         agent_profile_id: "",
+        unique_link_code: "",
       })
       setErrors({})
     }
   }, [open])
+
+  // Auto-generar unique_link_code cuando cambia nombre o apellido (solo si rol es agent)
+  useEffect(() => {
+    if (formData.role === 'agent' && formData.first_name && formData.last_name) {
+      const generatedCode = `${formData.first_name}-${formData.last_name}`
+        .toLowerCase()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "") // Remover acentos
+        .replace(/[^a-z0-9-]/g, "-") // Reemplazar caracteres especiales con guiones
+        .replace(/-+/g, "-") // Reemplazar múltiples guiones con uno solo
+        .replace(/^-|-$/g, "") // Remover guiones al inicio y final
+      
+      setFormData(prev => ({ ...prev, unique_link_code: generatedCode }))
+    }
+  }, [formData.first_name, formData.last_name, formData.role])
 
   // Determinar si mostrar el selector de agente
   // Solo admin y super_admin pueden seleccionar agente
@@ -134,6 +151,9 @@ export function NewUserModal({ open, onOpenChange, onSuccess }: NewUserModalProp
       zipcode: formData.zipcode.trim() || undefined,
       role: formData.role, // ✅ Cambiado de roleId a role
       agent_profile_id: agentProfileId, // Asignación automática para agentes
+      unique_link_code: formData.role === 'agent' && formData.unique_link_code.trim() 
+        ? formData.unique_link_code.trim() 
+        : undefined, // Solo enviar si es agente
     })
 
     if (result.success && result.user) {
@@ -151,6 +171,7 @@ export function NewUserModal({ open, onOpenChange, onSuccess }: NewUserModalProp
         zipcode: "",
         role: "", // ✅ Cambiado de roleId a role
         agent_profile_id: "",
+        unique_link_code: "",
       })
       setErrors({})
       onOpenChange(false)
@@ -318,6 +339,41 @@ export function NewUserModal({ open, onOpenChange, onSuccess }: NewUserModalProp
               <p className="text-sm text-red-500">{errors.role}</p>
             )}
           </div>
+
+          {/* Link único del agente - Solo visible cuando el rol es 'agent' */}
+          {formData.role === 'agent' && (
+            <div className="space-y-2 border-t pt-4">
+              <Label htmlFor="unique_link_code" className="flex items-center gap-2">
+                Link Único del Agente
+                <Info className="h-4 w-4 text-muted-foreground" />
+              </Label>
+              <div className="space-y-2">
+                <Input
+                  id="unique_link_code"
+                  type="text"
+                  placeholder="juan-perez"
+                  value={formData.unique_link_code}
+                  onChange={(e) => handleChange("unique_link_code", e.target.value)}
+                  className={errors.unique_link_code ? "border-red-500" : ""}
+                />
+                {errors.unique_link_code && (
+                  <p className="text-sm text-red-500">{errors.unique_link_code}</p>
+                )}
+                <p className="text-xs text-muted-foreground flex items-start gap-1">
+                  <Info className="h-3 w-3 mt-0.5 flex-shrink-0" />
+                  Este link se generará automáticamente basado en el nombre y apellido. Puedes editarlo si lo deseas.
+                </p>
+                {formData.unique_link_code && (
+                  <p className="text-xs text-blue-600 font-mono break-all">
+                    {(() => {
+                      const marketplaceUrl = process.env.NEXT_PUBLIC_MARKETPLACE_URL || 'http://localhost:3000'
+                      return `${marketplaceUrl}/agent/${formData.unique_link_code}`
+                    })()}
+                  </p>
+                )}
+              </div>
+            </div>
+          )}
 
           {/* Selector de Agente - Solo visible para admin/super_admin cuando el rol es 'client' */}
           {shouldShowAgentSelector && (

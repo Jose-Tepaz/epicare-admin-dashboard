@@ -41,7 +41,7 @@ export async function POST(request: NextRequest) {
 
     // Obtener datos del body
     const body = await request.json()
-    const { email, first_name, last_name, phone, address, state, city, zipcode, role: targetRole, agent_profile_id } = body
+    const { email, first_name, last_name, phone, address, state, city, zipcode, role: targetRole, agent_profile_id, unique_link_code } = body
 
     if (!email) {
       return NextResponse.json({ error: 'El email es requerido' }, { status: 400 })
@@ -221,6 +221,63 @@ export async function POST(request: NextRequest) {
         error: 'Error al crear el perfil del usuario',
         details: profileError.message 
       }, { status: 500 })
+    }
+
+    // Si el rol es 'agent', crear o actualizar el agent_profile
+    if (targetRole === 'agent') {
+      // Verificar si ya existe un agent_profile (puede ser creado por un trigger)
+      const { data: existingAgentProfile } = await adminClient
+        .from('agent_profiles')
+        .select('id, unique_link_code')
+        .eq('user_id', authUser.user.id)
+        .single()
+
+      const agentProfileData: any = {
+        user_id: authUser.user.id,
+        business_name: `${first_name} ${last_name}`, // Por defecto usar nombre completo
+        email: email,
+        first_name: first_name || null,
+        last_name: last_name || null,
+        phone: phone || null,
+        status: 'active',
+        is_default: false, // No es el agente por defecto
+      }
+
+      // Si se proporciona unique_link_code, usarlo
+      if (unique_link_code && unique_link_code.trim()) {
+        agentProfileData.unique_link_code = unique_link_code.trim()
+      }
+      // Si no, el trigger generate_unique_link_code() se encargará de generarlo
+
+      let agentProfileError = null
+
+      if (existingAgentProfile) {
+        // Si ya existe, actualizar (upsert)
+        const { error } = await adminClient
+          .from('agent_profiles')
+          .update(agentProfileData)
+          .eq('user_id', authUser.user.id)
+        agentProfileError = error
+        console.log(`✅ Agent profile actualizado para usuario: ${authUser.user.id}`)
+      } else {
+        // Si no existe, crear
+        const { error } = await adminClient
+          .from('agent_profiles')
+          .insert(agentProfileData)
+        agentProfileError = error
+        console.log(`✅ Agent profile creado para usuario: ${authUser.user.id}`)
+      }
+
+      if (agentProfileError) {
+        // Si falla la creación/actualización del agent_profile, eliminar el usuario creado
+        await adminClient.auth.admin.deleteUser(authUser.user.id)
+        await adminClient.from('users').delete().eq('id', authUser.user.id)
+        console.error('Error creating/updating agent profile:', agentProfileError)
+        return NextResponse.json({ 
+          error: 'Error al crear el perfil del agente',
+          details: agentProfileError.message 
+        }, { status: 500 })
+      }
     }
 
     return NextResponse.json({ 
