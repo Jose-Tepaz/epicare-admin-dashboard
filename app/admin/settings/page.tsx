@@ -1,5 +1,6 @@
 "use client"
 
+import { useState, useEffect } from "react"
 import { AdminLayout } from "@/components/admin-layout"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -8,12 +9,167 @@ import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Switch } from "@/components/ui/switch"
 import { Textarea } from "@/components/ui/textarea"
-import { User, Shield } from "lucide-react"
+import { User, Shield, Loader2 } from "lucide-react"
 import { useAdminAuth } from "@/contexts/admin-auth-context"
 import { AgentDetailView } from "@/components/agent-detail-view"
+import { useUpdateUser } from "@/lib/hooks/use-users"
+import { toast } from "sonner"
+import { createClient } from "@/lib/supabase/client"
 
 export default function SettingsPage() {
   const { user, isAgent } = useAdminAuth()
+  const { updateUser, updating } = useUpdateUser()
+  const [loadingProfile, setLoadingProfile] = useState(true)
+  const [changingPassword, setChangingPassword] = useState(false)
+  
+  // Estado del formulario de perfil
+  const [profileData, setProfileData] = useState({
+    first_name: '',
+    last_name: '',
+    phone: '',
+  })
+  
+  // Estado del formulario de contraseña
+  const [passwordData, setPasswordData] = useState({
+    currentPassword: '',
+    newPassword: '',
+    confirmPassword: '',
+  })
+
+  // Función para cargar datos del usuario
+  const loadUserData = async () => {
+    if (!user) return
+    
+    try {
+      setLoadingProfile(true)
+      const supabase = createClient()
+      const { data, error } = await supabase
+        .from('users')
+        .select('first_name, last_name, phone')
+        .eq('id', user.id)
+        .single()
+      
+      if (error) throw error
+      
+      setProfileData({
+        first_name: data.first_name || '',
+        last_name: data.last_name || '',
+        phone: data.phone || '',
+      })
+    } catch (error) {
+      console.error('Error loading user data:', error)
+      toast.error('Error al cargar datos del perfil')
+    } finally {
+      setLoadingProfile(false)
+    }
+  }
+
+  // Cargar datos del usuario al montar
+  useEffect(() => {
+    loadUserData()
+  }, [user])
+
+  const handleProfileSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!user) return
+    
+    try {
+      // 1. Actualizar tabla users
+      const success = await updateUser(user.id, profileData)
+      if (!success) return
+      
+      // 2. Si es agente, también actualizar agent_profiles
+      if (isAgent) {
+        const supabase = createClient()
+        
+        // Obtener el agent_profile_id
+        const { data: agentProfile, error: agentError } = await supabase
+          .from('agent_profiles')
+          .select('id')
+          .eq('user_id', user.id)
+          .single()
+        
+        if (agentError || !agentProfile) {
+          console.error('Error obteniendo agent profile:', agentError)
+          toast.warning('Perfil actualizado, pero no se pudo actualizar información de agente')
+          return
+        }
+        
+        // Actualizar agent_profiles
+        const { error: updateAgentError } = await supabase
+          .from('agent_profiles')
+          .update({
+            first_name: profileData.first_name,
+            last_name: profileData.last_name,
+            phone: profileData.phone,
+          })
+          .eq('id', agentProfile.id)
+        
+        if (updateAgentError) {
+          console.error('Error actualizando agent profile:', updateAgentError)
+          toast.warning('Perfil de usuario actualizado, pero no se pudo actualizar perfil de agente')
+          return
+        }
+      }
+      
+      toast.success('Perfil actualizado correctamente')
+    } catch (error) {
+      console.error('Error in handleProfileSubmit:', error)
+      toast.error('Error al actualizar el perfil')
+    }
+  }
+
+  const handlePasswordSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!user) return
+    
+    // Validaciones
+    if (passwordData.newPassword.length < 8) {
+      toast.error('La nueva contraseña debe tener al menos 8 caracteres')
+      return
+    }
+    
+    if (passwordData.newPassword !== passwordData.confirmPassword) {
+      toast.error('Las contraseñas no coinciden')
+      return
+    }
+    
+    try {
+      setChangingPassword(true)
+      
+      // Llamar al endpoint de cambio de contraseña
+      const response = await fetch('/api/auth/update-password', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          password: passwordData.newPassword,
+          userId: user.id,
+        }),
+      })
+      
+      const result = await response.json()
+      
+      if (!response.ok) {
+        throw new Error(result.error || 'Error al cambiar la contraseña')
+      }
+      
+      toast.success('Contraseña actualizada correctamente')
+      
+      // Limpiar el formulario
+      setPasswordData({
+        currentPassword: '',
+        newPassword: '',
+        confirmPassword: '',
+      })
+    } catch (error: any) {
+      console.error('Error changing password:', error)
+      toast.error(error.message || 'Error al cambiar la contraseña')
+    } finally {
+      setChangingPassword(false)
+    }
+  }
 
   // Si es agente, mostrar su perfil de agente + configuración estándar
   if (isAgent && user) {
@@ -60,48 +216,89 @@ export default function SettingsPage() {
                     <CardDescription>Update your personal information and contact details</CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-6">
-                    <div className="flex items-center gap-6">
-                      <div className="w-20 h-20 bg-slate-600 rounded-full flex items-center justify-center">
-                        <span className="text-white text-2xl font-medium">
-                          {user.email ? user.email[0].toUpperCase() : 'A'}
-                        </span>
+                    {loadingProfile ? (
+                      <div className="flex justify-center py-8">
+                        <Loader2 className="h-6 w-6 animate-spin text-gray-400" />
                       </div>
-                      <div className="space-y-2">
-                        <Button variant="outline" size="sm">
-                          Change Photo
-                        </Button>
-                        <p className="text-sm text-gray-500">JPG, PNG or GIF. Max size 2MB</p>
-                      </div>
-                    </div>
+                    ) : (
+                      <form onSubmit={handleProfileSubmit} className="space-y-6">
+                        <div className="flex items-center gap-6">
+                          <div className="w-20 h-20 bg-slate-600 rounded-full flex items-center justify-center">
+                            <span className="text-white text-2xl font-medium">
+                              {user?.email ? user.email[0].toUpperCase() : 'A'}
+                            </span>
+                          </div>
+                          <div className="space-y-2">
+                            <Button type="button" variant="outline" size="sm" disabled>
+                              Change Photo
+                            </Button>
+                            <p className="text-sm text-gray-500">Coming soon</p>
+                          </div>
+                        </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <Label htmlFor="firstName">First Name</Label>
-                        <Input id="firstName" placeholder="John" />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="lastName">Last Name</Label>
-                        <Input id="lastName" placeholder="Doe" />
-                      </div>
-                    </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div className="space-y-2">
+                            <Label htmlFor="firstName">First Name</Label>
+                            <Input 
+                              id="firstName" 
+                              placeholder="John" 
+                              value={profileData.first_name}
+                              onChange={(e) => setProfileData({ ...profileData, first_name: e.target.value })}
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label htmlFor="lastName">Last Name</Label>
+                            <Input 
+                              id="lastName" 
+                              placeholder="Doe" 
+                              value={profileData.last_name}
+                              onChange={(e) => setProfileData({ ...profileData, last_name: e.target.value })}
+                            />
+                          </div>
+                        </div>
 
-                    <div className="space-y-2">
-                      <Label htmlFor="email">Email Address</Label>
-                      <Input id="email" type="email" value={user.email || ''} disabled />
-                      <p className="text-xs text-gray-500">Email cannot be changed</p>
-                    </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="email">Email Address</Label>
+                          <Input id="email" type="email" value={user?.email || ''} disabled />
+                          <p className="text-xs text-gray-500">Email cannot be changed</p>
+                        </div>
 
-                    <div className="space-y-2">
-                      <Label htmlFor="phone">Phone Number</Label>
-                      <Input id="phone" type="tel" placeholder="+1 (555) 000-0000" />
-                    </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="phone">Phone Number</Label>
+                          <Input 
+                            id="phone" 
+                            type="tel" 
+                            placeholder="+1 (555) 000-0000" 
+                            value={profileData.phone}
+                            onChange={(e) => setProfileData({ ...profileData, phone: e.target.value })}
+                          />
+                        </div>
 
-                    
-
-                    <div className="flex justify-end gap-3">
-                      <Button variant="outline">Cancel</Button>
-                      <Button>Save Changes</Button>
-                    </div>
+                        <div className="flex justify-end gap-3">
+                          <Button 
+                            type="button" 
+                            variant="outline"
+                            onClick={() => {
+                              // Reset form
+                              loadUserData()
+                            }}
+                            disabled={updating}
+                          >
+                            Cancel
+                          </Button>
+                          <Button type="submit" disabled={updating}>
+                            {updating ? (
+                              <>
+                                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                Saving...
+                              </>
+                            ) : (
+                              'Save Changes'
+                            )}
+                          </Button>
+                        </div>
+                      </form>
+                    )}
                   </CardContent>
                 </Card>
               </TabsContent>
@@ -115,25 +312,55 @@ export default function SettingsPage() {
                       <CardDescription>Update your password to keep your account secure</CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-4">
-                      <div className="space-y-2">
-                        <Label htmlFor="currentPassword">Current Password</Label>
-                        <Input id="currentPassword" type="password" />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="newPassword">New Password</Label>
-                        <Input id="newPassword" type="password" />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="confirmPassword">Confirm New Password</Label>
-                        <Input id="confirmPassword" type="password" />
-                      </div>
-                      <div className="flex justify-end">
-                        <Button>Update Password</Button>
-                      </div>
+                      <form onSubmit={handlePasswordSubmit} className="space-y-4">
+                        <div className="space-y-2">
+                          <Label htmlFor="currentPassword">Current Password</Label>
+                          <Input 
+                            id="currentPassword" 
+                            type="password"
+                            value={passwordData.currentPassword}
+                            onChange={(e) => setPasswordData({ ...passwordData, currentPassword: e.target.value })}
+                            placeholder="Enter your current password"
+                          />
+                          <p className="text-xs text-gray-500">Not verified, but recommended for security</p>
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="newPassword">New Password</Label>
+                          <Input 
+                            id="newPassword" 
+                            type="password"
+                            value={passwordData.newPassword}
+                            onChange={(e) => setPasswordData({ ...passwordData, newPassword: e.target.value })}
+                            placeholder="At least 8 characters"
+                            required
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="confirmPassword">Confirm New Password</Label>
+                          <Input 
+                            id="confirmPassword" 
+                            type="password"
+                            value={passwordData.confirmPassword}
+                            onChange={(e) => setPasswordData({ ...passwordData, confirmPassword: e.target.value })}
+                            placeholder="Re-enter your new password"
+                            required
+                          />
+                        </div>
+                        <div className="flex justify-end">
+                          <Button type="submit" disabled={changingPassword}>
+                            {changingPassword ? (
+                              <>
+                                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                Updating...
+                              </>
+                            ) : (
+                              'Update Password'
+                            )}
+                          </Button>
+                        </div>
+                      </form>
                     </CardContent>
                   </Card>
-
-                  
                 </div>
               </TabsContent>
             </Tabs>
@@ -172,53 +399,86 @@ export default function SettingsPage() {
                 <CardDescription>Update your personal information and contact details</CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
-                <div className="flex items-center gap-6">
-                  <div className="w-20 h-20 bg-slate-600 rounded-full flex items-center justify-center">
-                    <span className="text-white text-2xl font-medium">A</span>
+                {loadingProfile ? (
+                  <div className="flex justify-center py-8">
+                    <Loader2 className="h-6 w-6 animate-spin text-gray-400" />
                   </div>
-                  <div className="space-y-2">
-                    <Button variant="outline" size="sm">
-                      Change Photo
-                    </Button>
-                    <p className="text-sm text-gray-500">JPG, PNG or GIF. Max size 2MB</p>
-                  </div>
-                </div>
+                ) : (
+                  <form onSubmit={handleProfileSubmit} className="space-y-6">
+                    <div className="flex items-center gap-6">
+                      <div className="w-20 h-20 bg-slate-600 rounded-full flex items-center justify-center">
+                        <span className="text-white text-2xl font-medium">
+                          {user?.email ? user.email[0].toUpperCase() : 'A'}
+                        </span>
+                      </div>
+                      <div className="space-y-2">
+                        <Button type="button" variant="outline" size="sm" disabled>
+                          Change Photo
+                        </Button>
+                        <p className="text-sm text-gray-500">Coming soon</p>
+                      </div>
+                    </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="firstName">First Name</Label>
-                    <Input id="firstName" placeholder="John" defaultValue="Admin" />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="lastName">Last Name</Label>
-                    <Input id="lastName" placeholder="Doe" defaultValue="User" />
-                  </div>
-                </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="firstName2">First Name</Label>
+                        <Input 
+                          id="firstName2" 
+                          placeholder="John" 
+                          value={profileData.first_name}
+                          onChange={(e) => setProfileData({ ...profileData, first_name: e.target.value })}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="lastName2">Last Name</Label>
+                        <Input 
+                          id="lastName2" 
+                          placeholder="Doe" 
+                          value={profileData.last_name}
+                          onChange={(e) => setProfileData({ ...profileData, last_name: e.target.value })}
+                        />
+                      </div>
+                    </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="email">Email Address</Label>
-                  <Input id="email" type="email" placeholder="admin@epicare.com" defaultValue="admin@epicare.com" />
-                </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="email2">Email Address</Label>
+                      <Input id="email2" type="email" value={user?.email || ''} disabled />
+                      <p className="text-xs text-gray-500">Email cannot be changed</p>
+                    </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="phone">Phone Number</Label>
-                  <Input id="phone" type="tel" placeholder="+1 (555) 000-0000" defaultValue="+1 (555) 123-4567" />
-                </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="phone2">Phone Number</Label>
+                      <Input 
+                        id="phone2" 
+                        type="tel" 
+                        placeholder="+1 (555) 000-0000" 
+                        value={profileData.phone}
+                        onChange={(e) => setProfileData({ ...profileData, phone: e.target.value })}
+                      />
+                    </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="bio">Bio</Label>
-                  <Textarea
-                    id="bio"
-                    placeholder="Tell us about yourself"
-                    defaultValue="System administrator for Epicare insurance platform"
-                    rows={4}
-                  />
-                </div>
-
-                <div className="flex justify-end gap-3">
-                  <Button variant="outline">Cancel</Button>
-                  <Button>Save Changes</Button>
-                </div>
+                    <div className="flex justify-end gap-3">
+                      <Button 
+                        type="button" 
+                        variant="outline"
+                        onClick={loadUserData}
+                        disabled={updating}
+                      >
+                        Cancel
+                      </Button>
+                      <Button type="submit" disabled={updating}>
+                        {updating ? (
+                          <>
+                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                            Saving...
+                          </>
+                        ) : (
+                          'Save Changes'
+                        )}
+                      </Button>
+                    </div>
+                  </form>
+                )}
               </CardContent>
             </Card>
           </TabsContent>
@@ -232,68 +492,53 @@ export default function SettingsPage() {
                   <CardDescription>Update your password to keep your account secure</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="currentPassword">Current Password</Label>
-                    <Input id="currentPassword" type="password" />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="newPassword">New Password</Label>
-                    <Input id="newPassword" type="password" />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="confirmPassword">Confirm New Password</Label>
-                    <Input id="confirmPassword" type="password" />
-                  </div>
-                  <div className="flex justify-end">
-                    <Button>Update Password</Button>
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader>
-                  <CardTitle>Two-Factor Authentication</CardTitle>
-                  <CardDescription>Add an extra layer of security to your account</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <div className="space-y-0.5">
-                      <Label>Enable 2FA</Label>
-                      <p className="text-sm text-gray-500">Require authentication code in addition to password</p>
+                  <form onSubmit={handlePasswordSubmit} className="space-y-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="currentPassword2">Current Password</Label>
+                      <Input 
+                        id="currentPassword2" 
+                        type="password"
+                        value={passwordData.currentPassword}
+                        onChange={(e) => setPasswordData({ ...passwordData, currentPassword: e.target.value })}
+                        placeholder="Enter your current password"
+                      />
+                      <p className="text-xs text-gray-500">Not verified, but recommended for security</p>
                     </div>
-                    <Switch />
-                  </div>
-                  <Button variant="outline">Configure 2FA</Button>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader>
-                  <CardTitle>Active Sessions</CardTitle>
-                  <CardDescription>Manage your active sessions across devices</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between p-3 border rounded-lg">
-                      <div>
-                        <p className="font-medium">Current Session</p>
-                        <p className="text-sm text-gray-500">Chrome on Windows - Miami, FL</p>
-                      </div>
-                      <span className="text-sm text-green-600">Active now</span>
+                    <div className="space-y-2">
+                      <Label htmlFor="newPassword2">New Password</Label>
+                      <Input 
+                        id="newPassword2" 
+                        type="password"
+                        value={passwordData.newPassword}
+                        onChange={(e) => setPasswordData({ ...passwordData, newPassword: e.target.value })}
+                        placeholder="At least 8 characters"
+                        required
+                      />
                     </div>
-                    <div className="flex items-center justify-between p-3 border rounded-lg">
-                      <div>
-                        <p className="font-medium">Mobile Device</p>
-                        <p className="text-sm text-gray-500">Safari on iPhone - Miami, FL</p>
-                      </div>
-                      <Button variant="outline" size="sm">
-                        Revoke
+                    <div className="space-y-2">
+                      <Label htmlFor="confirmPassword2">Confirm New Password</Label>
+                      <Input 
+                        id="confirmPassword2" 
+                        type="password"
+                        value={passwordData.confirmPassword}
+                        onChange={(e) => setPasswordData({ ...passwordData, confirmPassword: e.target.value })}
+                        placeholder="Re-enter your new password"
+                        required
+                      />
+                    </div>
+                    <div className="flex justify-end">
+                      <Button type="submit" disabled={changingPassword}>
+                        {changingPassword ? (
+                          <>
+                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                            Updating...
+                          </>
+                        ) : (
+                          'Update Password'
+                        )}
                       </Button>
                     </div>
-                  </div>
-                  <Button variant="destructive" className="w-full">
-                    Sign Out All Other Sessions
-                  </Button>
+                  </form>
                 </CardContent>
               </Card>
             </div>
