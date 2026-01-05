@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Switch } from "@/components/ui/switch"
 import { Textarea } from "@/components/ui/textarea"
-import { User, Shield, Loader2 } from "lucide-react"
+import { User, Shield, Loader2, Eye, EyeOff } from "lucide-react"
 import { useAdminAuth } from "@/contexts/admin-auth-context"
 import { AgentDetailView } from "@/components/agent-detail-view"
 import { useUpdateUser } from "@/lib/hooks/use-users"
@@ -34,6 +34,13 @@ export default function SettingsPage() {
     currentPassword: '',
     newPassword: '',
     confirmPassword: '',
+  })
+  
+  // Estado para mostrar/ocultar contraseñas
+  const [showPasswords, setShowPasswords] = useState({
+    current: false,
+    new: false,
+    confirm: false,
   })
 
   // Función para cargar datos del usuario
@@ -315,36 +322,84 @@ export default function SettingsPage() {
                       <form onSubmit={handlePasswordSubmit} className="space-y-4">
                         <div className="space-y-2">
                           <Label htmlFor="currentPassword">Current Password</Label>
-                          <Input 
-                            id="currentPassword" 
-                            type="password"
-                            value={passwordData.currentPassword}
-                            onChange={(e) => setPasswordData({ ...passwordData, currentPassword: e.target.value })}
-                            placeholder="Enter your current password"
-                          />
+                          <div className="relative">
+                            <Input 
+                              id="currentPassword" 
+                              type={showPasswords.current ? "text" : "password"}
+                              value={passwordData.currentPassword}
+                              onChange={(e) => setPasswordData({ ...passwordData, currentPassword: e.target.value })}
+                              placeholder="Enter your current password"
+                              className="pr-12"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => setShowPasswords({ ...showPasswords, current: !showPasswords.current })}
+                              className="absolute right-0 top-0 h-full px-3 flex items-center justify-center text-gray-600 hover:text-gray-900 focus:outline-none cursor-pointer bg-transparent hover:bg-gray-50 transition-colors"
+                              tabIndex={-1}
+                              aria-label="Toggle password visibility"
+                            >
+                              {showPasswords.current ? (
+                                <EyeOff className="h-5 w-5" />
+                              ) : (
+                                <Eye className="h-5 w-5" />
+                              )}
+                            </button>
+                          </div>
                           <p className="text-xs text-gray-500">Not verified, but recommended for security</p>
                         </div>
                         <div className="space-y-2">
                           <Label htmlFor="newPassword">New Password</Label>
-                          <Input 
-                            id="newPassword" 
-                            type="password"
-                            value={passwordData.newPassword}
-                            onChange={(e) => setPasswordData({ ...passwordData, newPassword: e.target.value })}
-                            placeholder="At least 8 characters"
-                            required
-                          />
+                          <div className="relative">
+                            <Input 
+                              id="newPassword" 
+                              type={showPasswords.new ? "text" : "password"}
+                              value={passwordData.newPassword}
+                              onChange={(e) => setPasswordData({ ...passwordData, newPassword: e.target.value })}
+                              placeholder="At least 8 characters"
+                              className="pr-12"
+                              required
+                            />
+                            <button
+                              type="button"
+                              onClick={() => setShowPasswords({ ...showPasswords, new: !showPasswords.new })}
+                              className="absolute right-0 top-0 h-full px-3 flex items-center justify-center text-gray-600 hover:text-gray-900 focus:outline-none cursor-pointer bg-transparent hover:bg-gray-50 transition-colors"
+                              tabIndex={-1}
+                              aria-label="Toggle password visibility"
+                            >
+                              {showPasswords.new ? (
+                                <EyeOff className="h-5 w-5" />
+                              ) : (
+                                <Eye className="h-5 w-5" />
+                              )}
+                            </button>
+                          </div>
                         </div>
                         <div className="space-y-2">
                           <Label htmlFor="confirmPassword">Confirm New Password</Label>
-                          <Input 
-                            id="confirmPassword" 
-                            type="password"
-                            value={passwordData.confirmPassword}
-                            onChange={(e) => setPasswordData({ ...passwordData, confirmPassword: e.target.value })}
-                            placeholder="Re-enter your new password"
-                            required
-                          />
+                          <div className="relative">
+                            <Input 
+                              id="confirmPassword" 
+                              type={showPasswords.confirm ? "text" : "password"}
+                              value={passwordData.confirmPassword}
+                              onChange={(e) => setPasswordData({ ...passwordData, confirmPassword: e.target.value })}
+                              placeholder="Re-enter your new password"
+                              className="pr-12"
+                              required
+                            />
+                            <button
+                              type="button"
+                              onClick={() => setShowPasswords({ ...showPasswords, confirm: !showPasswords.confirm })}
+                              className="absolute right-0 top-0 h-full px-3 flex items-center justify-center text-gray-600 hover:text-gray-900 focus:outline-none cursor-pointer bg-transparent hover:bg-gray-50 transition-colors"
+                              tabIndex={-1}
+                              aria-label="Toggle password visibility"
+                            >
+                              {showPasswords.confirm ? (
+                                <EyeOff className="h-5 w-5" />
+                              ) : (
+                                <Eye className="h-5 w-5" />
+                              )}
+                            </button>
+                          </div>
                         </div>
                         <div className="flex justify-end">
                           <Button type="submit" disabled={changingPassword}>
@@ -495,36 +550,84 @@ export default function SettingsPage() {
                   <form onSubmit={handlePasswordSubmit} className="space-y-4">
                     <div className="space-y-2">
                       <Label htmlFor="currentPassword2">Current Password</Label>
-                      <Input 
-                        id="currentPassword2" 
-                        type="password"
-                        value={passwordData.currentPassword}
-                        onChange={(e) => setPasswordData({ ...passwordData, currentPassword: e.target.value })}
-                        placeholder="Enter your current password"
-                      />
+                      <div className="relative">
+                        <Input 
+                          id="currentPassword2" 
+                          type={showPasswords.current ? "text" : "password"}
+                          value={passwordData.currentPassword}
+                          onChange={(e) => setPasswordData({ ...passwordData, currentPassword: e.target.value })}
+                          placeholder="Enter your current password"
+                          className="pr-12"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowPasswords({ ...showPasswords, current: !showPasswords.current })}
+                          className="absolute right-0 top-0 h-full px-3 flex items-center justify-center text-gray-600 hover:text-gray-900 focus:outline-none cursor-pointer bg-transparent hover:bg-gray-50 transition-colors"
+                          tabIndex={-1}
+                          aria-label="Toggle password visibility"
+                        >
+                          {showPasswords.current ? (
+                            <EyeOff className="h-5 w-5" />
+                          ) : (
+                            <Eye className="h-5 w-5" />
+                          )}
+                        </button>
+                      </div>
                       <p className="text-xs text-gray-500">Not verified, but recommended for security</p>
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="newPassword2">New Password</Label>
-                      <Input 
-                        id="newPassword2" 
-                        type="password"
-                        value={passwordData.newPassword}
-                        onChange={(e) => setPasswordData({ ...passwordData, newPassword: e.target.value })}
-                        placeholder="At least 8 characters"
-                        required
-                      />
+                      <div className="relative">
+                        <Input 
+                          id="newPassword2" 
+                          type={showPasswords.new ? "text" : "password"}
+                          value={passwordData.newPassword}
+                          onChange={(e) => setPasswordData({ ...passwordData, newPassword: e.target.value })}
+                          placeholder="At least 8 characters"
+                          className="pr-12"
+                          required
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowPasswords({ ...showPasswords, new: !showPasswords.new })}
+                          className="absolute right-0 top-0 h-full px-3 flex items-center justify-center text-gray-600 hover:text-gray-900 focus:outline-none cursor-pointer bg-transparent hover:bg-gray-50 transition-colors"
+                          tabIndex={-1}
+                          aria-label="Toggle password visibility"
+                        >
+                          {showPasswords.new ? (
+                            <EyeOff className="h-5 w-5" />
+                          ) : (
+                            <Eye className="h-5 w-5" />
+                          )}
+                        </button>
+                      </div>
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="confirmPassword2">Confirm New Password</Label>
-                      <Input 
-                        id="confirmPassword2" 
-                        type="password"
-                        value={passwordData.confirmPassword}
-                        onChange={(e) => setPasswordData({ ...passwordData, confirmPassword: e.target.value })}
-                        placeholder="Re-enter your new password"
-                        required
-                      />
+                      <div className="relative">
+                        <Input 
+                          id="confirmPassword2" 
+                          type={showPasswords.confirm ? "text" : "password"}
+                          value={passwordData.confirmPassword}
+                          onChange={(e) => setPasswordData({ ...passwordData, confirmPassword: e.target.value })}
+                          placeholder="Re-enter your new password"
+                          className="pr-12"
+                          required
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowPasswords({ ...showPasswords, confirm: !showPasswords.confirm })}
+                          className="absolute right-0 top-0 h-full px-3 flex items-center justify-center text-gray-600 hover:text-gray-900 focus:outline-none cursor-pointer bg-transparent hover:bg-gray-50 transition-colors"
+                          tabIndex={-1}
+                          aria-label="Toggle password visibility"
+                        >
+                          {showPasswords.confirm ? (
+                            <EyeOff className="h-5 w-5" />
+                          ) : (
+                            <Eye className="h-5 w-5" />
+                          )}
+                        </button>
+                      </div>
                     </div>
                     <div className="flex justify-end">
                       <Button type="submit" disabled={changingPassword}>
