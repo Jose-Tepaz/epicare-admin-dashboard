@@ -71,9 +71,15 @@ import { toast } from "sonner"
 
 interface AgentDetailViewProps {
   userId: string
+  showClientsTab?: boolean
+  showSalesTab?: boolean
 }
 
-export function AgentDetailView({ userId }: AgentDetailViewProps) {
+export function AgentDetailView({ 
+  userId, 
+  showClientsTab = true, 
+  showSalesTab = true 
+}: AgentDetailViewProps) {
   console.log('🔍 AgentDetailView: Rendering for userId:', userId)
   const { agent, loading: agentLoading, refetch: refetchAgent } = useAgentProfile(userId)
   const { stats, loading: statsLoading } = useAgentStats(agent?.id || null)
@@ -159,12 +165,16 @@ export function AgentDetailView({ userId }: AgentDetailViewProps) {
 
       {/* Tabs */}
       <Tabs defaultValue="info" className="space-y-4">
-        <TabsList>
+        <TabsList className={`${
+          showClientsTab && showSalesTab ? 'grid-cols-5' :
+          showClientsTab || showSalesTab ? 'grid-cols-4' :
+          'grid-cols-3'
+        }`}>
           <TabsTrigger value="info">Información</TabsTrigger>
           <TabsTrigger value="appointments">Appointments</TabsTrigger>
           <TabsTrigger value="licenses">Licencias</TabsTrigger>
-          <TabsTrigger value="clients">Clientes</TabsTrigger>
-          <TabsTrigger value="sales">Ventas</TabsTrigger>
+          {showClientsTab && <TabsTrigger value="clients">Clientes</TabsTrigger>}
+          {showSalesTab && <TabsTrigger value="sales">Ventas</TabsTrigger>}
         </TabsList>
 
         <TabsContent value="info">
@@ -179,13 +189,17 @@ export function AgentDetailView({ userId }: AgentDetailViewProps) {
           <LicensesTab agentProfileId={agent.id} />
         </TabsContent>
 
-        <TabsContent value="clients">
-          <ClientsTab agentProfileId={agent.id} />
-        </TabsContent>
+        {showClientsTab && (
+          <TabsContent value="clients">
+            <ClientsTab agentProfileId={agent.id} />
+          </TabsContent>
+        )}
 
-        <TabsContent value="sales">
-          <SalesTab agentProfileId={agent.id} />
-        </TabsContent>
+        {showSalesTab && (
+          <TabsContent value="sales">
+            <SalesTab agentProfileId={agent.id} />
+          </TabsContent>
+        )}
       </Tabs>
     </div>
   )
