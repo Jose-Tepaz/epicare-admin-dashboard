@@ -1,6 +1,7 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
+import { useRouter } from "next/navigation"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
@@ -1364,37 +1365,23 @@ function AssignClientDialog({
 // ============================================================================
 
 function SalesTab({ agentProfileId }: { agentProfileId: string }) {
+  const router = useRouter()
   const [applications, setApplications] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
 
   // Fetch applications where assigned_agent_id = agentProfileId
-  useState(() => {
+  useEffect(() => {
     const fetchApplications = async () => {
       try {
         setLoading(true)
-        const supabase = createClient()
+        const response = await fetch(`/api/agent-applications?agent_profile_id=${agentProfileId}`)
+        const result = await response.json()
 
-        const { data, error } = await supabase
-          .from('applications')
-          .select(`
-            id,
-            status,
-            created_at,
-            insurance_companies:insurance_company_id (
-              name
-            ),
-            users:user_id (
-              first_name,
-              last_name,
-              email
-            )
-          `)
-          .eq('assigned_agent_id', agentProfileId)
-          .order('created_at', { ascending: false })
+        if (!response.ok) {
+          throw new Error(result.error || 'Error fetching applications')
+        }
 
-        if (error) throw error
-
-        setApplications(data || [])
+        setApplications(result.data || [])
       } catch (err) {
         console.error('Error fetching applications:', err)
       } finally {
@@ -1403,7 +1390,7 @@ function SalesTab({ agentProfileId }: { agentProfileId: string }) {
     }
 
     fetchApplications()
-  })
+  }, [agentProfileId])
 
   const statusColors = {
     draft: 'bg-gray-100 text-gray-800',
@@ -1413,6 +1400,10 @@ function SalesTab({ agentProfileId }: { agentProfileId: string }) {
     active: 'bg-green-100 text-green-800',
     rejected: 'bg-red-100 text-red-800',
     cancelled: 'bg-gray-100 text-gray-800',
+  }
+
+  const handleApplicationClick = (appId: string) => {
+    router.push(`/admin/requests/${appId}`)
   }
 
   return (
@@ -1430,29 +1421,35 @@ function SalesTab({ agentProfileId }: { agentProfileId: string }) {
         ) : (
           <div className="space-y-3">
             {applications.map((app: any) => (
-              <div key={app.id} className="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50">
+              <div 
+                key={app.id} 
+                onClick={() => handleApplicationClick(app.id)}
+                className="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50 cursor-pointer transition-colors"
+              >
                 <div className="flex-1">
                   <div className="flex items-center gap-2 mb-1">
                     <FileText className="h-4 w-4 text-gray-400" />
-                    <span className="font-medium">{app.insurance_companies?.name || 'Aseguradora'}</span>
+                    <span className="font-medium">
+                      {app.insurance_companies?.name || app.carrier_name || 'Aseguradora'}
+                    </span>
                     <Badge className={statusColors[app.status as keyof typeof statusColors] || statusColors.draft}>
                       {app.status}
                     </Badge>
                   </div>
-                  {app.users && (
+                  {app.users ? (
                     <p className="text-sm text-gray-600">
                       Cliente: {app.users.first_name} {app.users.last_name}
                     </p>
-                  )}
+                  ) : app.email ? (
+                    <p className="text-sm text-gray-600">
+                      Cliente: {app.email}
+                    </p>
+                  ) : null}
                   <p className="text-xs text-gray-500">
                     {format(new Date(app.created_at), 'dd MMM yyyy HH:mm', { locale: es })}
                   </p>
                 </div>
-                <Button variant="ghost" size="sm" asChild>
-                  <a href={`/admin/requests/${app.id}`} target="_blank" rel="noopener noreferrer">
-                    Ver Detalle
-                  </a>
-                </Button>
+                <Edit className="h-4 w-4 text-gray-400" />
               </div>
             ))}
           </div>
