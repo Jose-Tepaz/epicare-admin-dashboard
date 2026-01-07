@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Eye, Search, Loader2, Mail, Phone, Shield, UserPlus, Trash2, MailPlus, Copy, Check } from "lucide-react"
 import { useUsers, useDeleteUser, useResendInvite } from "@/lib/hooks/use-users"
@@ -26,7 +26,7 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
-  DialogFooter,
+  DialogFooter,   
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
@@ -34,6 +34,7 @@ import { NewUserModal } from "@/components/new-user-modal"
 import { format } from "date-fns"
 import { es } from "date-fns/locale"
 import { toast } from "sonner"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@radix-ui/react-dropdown-menu"
 
 const getInitials = (firstName: string | null, lastName: string | null, email: string) => {
   if (firstName && lastName) {
@@ -122,7 +123,7 @@ export function UsersTable() {
     <Card>
       <CardHeader>
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <CardTitle className="text-xl font-semibold">Usuarios</CardTitle>
+          
           <div className="flex flex-col sm:flex-row gap-2">
             {(isAdmin || isSuperAdmin || isAgent) && (
               <Button onClick={() => setModalOpen(true)} className="bg-blue-600 hover:bg-blue-700">
@@ -139,18 +140,21 @@ export function UsersTable() {
                 className="pl-10 w-full sm:w-64"
               />
             </div>
-            <Select value={roleFilter} onValueChange={setRoleFilter}>
-              <SelectTrigger className="w-full sm:w-40">
-                <SelectValue placeholder="Rol" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todos los Roles</SelectItem>
-                <SelectItem value="super_admin">Super Admin</SelectItem>
-                <SelectItem value="admin">Admin</SelectItem>
-                <SelectItem value="support_staff">Support Staff</SelectItem>
-                <SelectItem value="client">Cliente</SelectItem>
-              </SelectContent>
-            </Select>
+            <Tabs value={roleFilter} onValueChange={setRoleFilter} className="w-full sm:w-auto">
+              <TabsList>
+                <TabsTrigger value="all">Todos</TabsTrigger>
+                <TabsTrigger value="client">Clientes</TabsTrigger>
+                {isAdmin || isSuperAdmin && 
+                <>
+                <TabsTrigger value="super_admin">Super Admin</TabsTrigger>
+                <TabsTrigger value="admin">Admin</TabsTrigger>
+                <TabsTrigger value="agent">Agente</TabsTrigger>
+                </>
+                }
+                
+                <TabsTrigger value="support_staff">Staff</TabsTrigger>
+              </TabsList>
+            </Tabs>
           </div>
         </div>
       </CardHeader>
@@ -169,12 +173,14 @@ export function UsersTable() {
               <table className="w-full">
                 <thead>
                   <tr className="border-b border-gray-200">
-                    <th className="text-left py-3 px-4 font-medium text-gray-600">Usuario</th>
-                    <th className="text-left py-3 px-4 font-medium text-gray-600">Contacto</th>
-                    <th className="text-left py-3 px-4 font-medium text-gray-600">Roles</th>
-                    <th className="text-left py-3 px-4 font-medium text-gray-600">Applications</th>
-                    <th className="text-left py-3 px-4 font-medium text-gray-600">Fecha de Registro</th>
-                    <th className="text-left py-3 px-4 font-medium text-gray-600">Acciones</th>
+                    <th className="text-left py-3 px-4 font-medium text-sm text-gray-600">Usuario</th>
+                    <th className="text-left py-3 px-4 font-medium text-sm text-gray-600">Contacto</th>
+                    <th className="text-left py-3 px-4 font-medium text-sm text-gray-600">Roles</th>
+                    {['all', 'client'].includes(roleFilter) && (
+                      <th className="text-left py-3 px-4 font-medium text-sm text-gray-600">Applications</th>
+                    )}
+                    <th className="text-left py-3 px-4 font-medium text-sm text-gray-600">Fecha de Registro</th>
+                    <th className="text-left py-3 px-4 font-medium text-sm text-gray-600">Acciones</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -193,7 +199,7 @@ export function UsersTable() {
                               </AvatarFallback>
                             </Avatar>
                             <div>
-                              <p className="font-medium text-gray-900">{userName}</p>
+                              <p className="font-medium text-sm text-gray-900">{userName}</p>
                               <p className="text-sm text-gray-500">{user.email}</p>
                             </div>
                           </div>
@@ -236,12 +242,14 @@ export function UsersTable() {
                             )}
                           </div>
                         </td>
-                        <td className="py-3 px-4">
-                          <Badge variant="secondary">
-                            {user.application_count} {user.application_count === 1 ? 'application' : 'applications'}
-                          </Badge>
-                        </td>
-                        <td className="py-3 px-4">
+                        {['all', 'client'].includes(roleFilter) && (
+                          <td className="py-3 px-4">
+                            <Badge variant="secondary">
+                              {user.application_count} {user.application_count === 1 ? 'application' : 'applications'}
+                            </Badge>
+                          </td>
+                        )}
+                        <td className="py-3 px-4 min-w-40">
                           <span className="text-sm text-gray-600">
                             {format(new Date(user.created_at), 'dd MMM yyyy', { locale: es })}
                           </span>

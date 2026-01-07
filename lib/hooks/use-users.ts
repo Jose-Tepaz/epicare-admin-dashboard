@@ -298,7 +298,6 @@ export function useUsers(
     filters.search,
     filters.startDate,
     filters.endDate,
-    filters.role,
     pagination.page,
     pagination.pageSize,
     isAgent,
