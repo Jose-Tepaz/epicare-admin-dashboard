@@ -687,6 +687,9 @@ export function useCreateUser() {
     zipcode?: string
     role: string // ✅ Ahora espera el nombre del rol directamente
     agent_profile_id?: string // ID del agente a asignar (opcional)
+    unique_link_code?: string // Link único del agente (opcional)
+    npn?: string // NPN (opcional)
+    epicare_number?: string // Epicare Number (opcional)
   }) => {
     try {
       setCreating(true)

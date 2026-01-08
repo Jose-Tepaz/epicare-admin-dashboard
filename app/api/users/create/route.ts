@@ -41,11 +41,14 @@ export async function POST(request: NextRequest) {
 
     // Obtener datos del body
     const body = await request.json()
-    const { email, first_name, last_name, phone, address, state, city, zipcode, role: targetRole, agent_profile_id, unique_link_code } = body
+    const { email, first_name, last_name, phone, address, state, city, zipcode, role: targetRole, agent_profile_id, unique_link_code, npn, epicare_number } = body
 
     if (!email) {
       return NextResponse.json({ error: 'El email es requerido' }, { status: 400 })
     }
+// ... [existing validation code] ...
+
+
 
     if (!first_name || !last_name) {
       return NextResponse.json({ error: 'El nombre y apellido son requeridos' }, { status: 400 })
@@ -247,6 +250,15 @@ export async function POST(request: NextRequest) {
       if (unique_link_code && unique_link_code.trim()) {
         agentProfileData.unique_link_code = unique_link_code.trim()
       }
+
+      if (npn && npn.trim()) {
+        agentProfileData.npn = npn.trim()
+      }
+
+      if (epicare_number && epicare_number.trim()) {
+        agentProfileData.epicare_number = epicare_number.trim()
+      }
+
       // Si no, el trigger generate_unique_link_code() se encargará de generarlo
 
       let agentProfileError = null

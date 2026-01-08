@@ -223,7 +223,7 @@ function AgentInfoTab({ agent, onUpdate }: { agent: any; onUpdate: () => void })
   const [formData, setFormData] = useState({
     first_name: agent?.first_name || '',
     last_name: agent?.last_name || '',
-    npm: agent?.npm || '',
+    npn: agent?.npn || '',
     epicare_number: agent?.epicare_number || '',
     status: safeStatus,
   })
@@ -282,11 +282,11 @@ function AgentInfoTab({ agent, onUpdate }: { agent: any; onUpdate: () => void })
                 />
               </div>
               <div>
-                <Label htmlFor="npm">NPM</Label>
+                <Label htmlFor="npn">NPN</Label>
                 <Input
-                  id="npm"
-                  value={formData.npm}
-                  onChange={(e) => setFormData({ ...formData, npm: e.target.value })}
+                  id="npn"
+                  value={formData.npn}
+                  onChange={(e) => setFormData({ ...formData, npn: e.target.value })}
                   placeholder="National Producer Number"
                 />
               </div>
@@ -378,8 +378,8 @@ function AgentInfoTab({ agent, onUpdate }: { agent: any; onUpdate: () => void })
                 </p>
               </div>
               <div>
-                <p className="text-sm text-gray-500">NPM</p>
-                <p className="font-medium">{agent.npm || 'No especificado'}</p>
+                <p className="text-sm text-gray-500">NPN</p>
+                <p className="font-medium">{agent.npn || 'No especificado'}</p>
               </div>
               <div>
                 <p className="text-sm text-gray-500">Número Epicare</p>

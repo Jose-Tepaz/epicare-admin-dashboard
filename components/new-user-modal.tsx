@@ -30,7 +30,10 @@ export function NewUserModal({ open, onOpenChange, onSuccess }: NewUserModalProp
     role: "", // ✅ Cambiado de roleId a role
     agent_profile_id: "", // Nuevo campo para selección de agente
     unique_link_code: "", // Nuevo campo para link único del agente
+    npn: "",
+    epicare_number: "",
   })
+  
   const [errors, setErrors] = useState<Record<string, string>>({})
   const { createUser, creating } = useCreateUser()
   const { roles: availableRoles, loading: rolesLoading } = useAvailableRoles()
@@ -71,6 +74,8 @@ export function NewUserModal({ open, onOpenChange, onSuccess }: NewUserModalProp
         role: "",
         agent_profile_id: "",
         unique_link_code: "",
+        npn: "",
+        epicare_number: "",
       })
       setErrors({})
     }
@@ -154,6 +159,10 @@ export function NewUserModal({ open, onOpenChange, onSuccess }: NewUserModalProp
       unique_link_code: formData.role === 'agent' && formData.unique_link_code.trim() 
         ? formData.unique_link_code.trim() 
         : undefined, // Solo enviar si es agente
+      npn: formData.role === 'agent' && formData.npn.trim() 
+        ? formData.npn.trim() 
+        : undefined, // Solo enviar si es agente
+      epicare_number: formData.role === 'agent' && formData.epicare_number?.trim() ? formData.epicare_number.trim() : undefined,
     })
 
     if (result.success && result.user) {
@@ -172,6 +181,8 @@ export function NewUserModal({ open, onOpenChange, onSuccess }: NewUserModalProp
         role: "", // ✅ Cambiado de roleId a role
         agent_profile_id: "",
         unique_link_code: "",
+        npn: "",
+        epicare_number: "",
       })
       setErrors({})
       onOpenChange(false)
@@ -205,6 +216,31 @@ export function NewUserModal({ open, onOpenChange, onSuccess }: NewUserModalProp
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="role">
+              Rol <span className="text-red-500">*</span>
+            </Label>
+            <Select 
+              value={formData.role} 
+              onValueChange={(value) => handleChange("role", value)}
+              disabled={rolesLoading || creating}
+            >
+              <SelectTrigger id="role" className={errors.role ? "border-red-500" : ""}>
+                <SelectValue placeholder="Seleccionar rol" />
+              </SelectTrigger>
+              <SelectContent>
+                {filteredRoles.map((role) => (
+                  <SelectItem key={role.id} value={role.name}>
+                    {role.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {errors.role && (
+              <p className="text-sm text-red-500">{errors.role}</p>
+            )}
+          </div>
+
           <div className="space-y-2">
             <Label htmlFor="email">
               Email <span className="text-red-500">*</span>
@@ -269,108 +305,66 @@ export function NewUserModal({ open, onOpenChange, onSuccess }: NewUserModalProp
             />
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="address">Dirección</Label>
-            <Input
-              id="address"
-              type="text"
-              placeholder="123 Main St"
-              value={formData.address}
-              onChange={(e) => handleChange("address", e.target.value)}
-            />
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="city">Ciudad</Label>
-              <Input
-                id="city"
-                type="text"
-                placeholder="Nueva York"
-                value={formData.city}
-                onChange={(e) => handleChange("city", e.target.value)}
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="state">Estado</Label>
-              <Input
-                id="state"
-                type="text"
-                placeholder="NY"
-                value={formData.state}
-                onChange={(e) => handleChange("state", e.target.value)}
-              />
-            </div>
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="zipcode">Código Postal</Label>
-            <Input
-              id="zipcode"
-              type="text"
-              placeholder="10001"
-              value={formData.zipcode}
-              onChange={(e) => handleChange("zipcode", e.target.value)}
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="role">
-              Rol <span className="text-red-500">*</span>
-            </Label>
-            <Select 
-              value={formData.role} 
-              onValueChange={(value) => handleChange("role", value)}
-              disabled={rolesLoading || creating}
-            >
-              <SelectTrigger id="role" className={errors.role ? "border-red-500" : ""}>
-                <SelectValue placeholder="Seleccionar rol" />
-              </SelectTrigger>
-              <SelectContent>
-                {filteredRoles.map((role) => (
-                  <SelectItem key={role.id} value={role.name}>
-                    {role.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            {errors.role && (
-              <p className="text-sm text-red-500">{errors.role}</p>
-            )}
-          </div>
-
           {/* Link único del agente - Solo visible cuando el rol es 'agent' */}
           {formData.role === 'agent' && (
-            <div className="space-y-2 border-t pt-4">
-              <Label htmlFor="unique_link_code" className="flex items-center gap-2">
-                Link Único del Agente
-                <Info className="h-4 w-4 text-muted-foreground" />
-              </Label>
+            <div className="space-y-4 border-t pt-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="npn">
+                    NPN
+                  </Label>
+                  <Input
+                    id="npn"
+                    type="text"
+                    placeholder="1234567890"
+                    value={formData.npn || ""} // Asegura que no sea undefined
+                    onChange={(e) => handleChange("npn", e.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="epicare_number">
+                    Epicare Number
+                  </Label>
+                  <Input
+                    id="epicare_number"
+                    type="text"
+                    placeholder="EPI-12345"
+                    value={formData.epicare_number || ""} // Asegura que no sea undefined
+                    onChange={(e) => handleChange("epicare_number", e.target.value)}
+                  />
+                </div>
+              </div>
+
               <div className="space-y-2">
-                <Input
-                  id="unique_link_code"
-                  type="text"
-                  placeholder="juan-perez"
-                  value={formData.unique_link_code}
-                  onChange={(e) => handleChange("unique_link_code", e.target.value)}
-                  className={errors.unique_link_code ? "border-red-500" : ""}
-                />
-                {errors.unique_link_code && (
-                  <p className="text-sm text-red-500">{errors.unique_link_code}</p>
-                )}
-                <p className="text-xs text-muted-foreground flex items-start gap-1">
-                  <Info className="h-3 w-3 mt-0.5 flex-shrink-0" />
-                  Este link se generará automáticamente basado en el nombre y apellido. Puedes editarlo si lo deseas.
-                </p>
-                {formData.unique_link_code && (
-                  <p className="text-xs text-blue-600 font-mono break-all">
-                    {(() => {
-                      const marketplaceUrl = process.env.NEXT_PUBLIC_MARKETPLACE_URL || 'http://localhost:3000'
-                      return `${marketplaceUrl}/agent/${formData.unique_link_code}`
-                    })()}
+                <Label htmlFor="unique_link_code" className="flex items-center gap-2">
+                  Link Único del Agente
+                  <Info className="h-4 w-4 text-muted-foreground" />
+                </Label>
+                <div className="space-y-2">
+                  <Input
+                    id="unique_link_code"
+                    type="text"
+                    placeholder="juan-perez"
+                    value={formData.unique_link_code}
+                    onChange={(e) => handleChange("unique_link_code", e.target.value)}
+                    className={errors.unique_link_code ? "border-red-500" : ""}
+                  />
+                  {errors.unique_link_code && (
+                    <p className="text-sm text-red-500">{errors.unique_link_code}</p>
+                  )}
+                  <p className="text-xs text-muted-foreground flex items-start gap-1">
+                    <Info className="h-3 w-3 mt-0.5 flex-shrink-0" />
+                    Este link se generará automáticamente basado en el nombre y apellido. Puedes editarlo si lo deseas.
                   </p>
-                )}
+                  {formData.unique_link_code && (
+                    <p className="text-xs text-blue-600 font-mono break-all">
+                      {(() => {
+                        const marketplaceUrl = process.env.NEXT_PUBLIC_MARKETPLACE_URL || 'http://localhost:3000'
+                        return `${marketplaceUrl}/agent/${formData.unique_link_code}`
+                      })()}
+                    </p>
+                  )}
+                </div>
               </div>
             </div>
           )}
@@ -439,6 +433,56 @@ export function NewUserModal({ open, onOpenChange, onSuccess }: NewUserModalProp
               )}
             </div>
           )}
+
+          <div className="space-y-2">
+            <Label htmlFor="address">Dirección</Label>
+            <Input
+              id="address"
+              type="text"
+              placeholder="123 Main St"
+              value={formData.address}
+              onChange={(e) => handleChange("address", e.target.value)}
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="city">Ciudad</Label>
+              <Input
+                id="city"
+                type="text"
+                placeholder="Nueva York"
+                value={formData.city}
+                onChange={(e) => handleChange("city", e.target.value)}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="state">Estado</Label>
+              <Input
+                id="state"
+                type="text"
+                placeholder="NY"
+                value={formData.state}
+                onChange={(e) => handleChange("state", e.target.value)}
+              />
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="zipcode">Código Postal</Label>
+            <Input
+              id="zipcode"
+              type="text"
+              placeholder="10001"
+              value={formData.zipcode}
+              onChange={(e) => handleChange("zipcode", e.target.value)}
+            />
+          </div>
+
+          
+
+          
 
           <div className="flex justify-end gap-2 pt-4">
             <Button

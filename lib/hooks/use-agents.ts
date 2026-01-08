@@ -12,7 +12,7 @@ export interface AgentProfile {
   id: string
   user_id: string
   unique_link_code: string | null
-  npm: string | null
+  npn: string | null
   epicare_number: string | null
   first_name: string | null
   last_name: string | null

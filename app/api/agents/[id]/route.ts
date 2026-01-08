@@ -189,7 +189,7 @@ export async function PUT(
       phone,
       email,
       unique_link_code,
-      npm,
+      npn,
       epicare_number,
       business_name,
       photo_url,
@@ -209,7 +209,7 @@ export async function PUT(
     // Solo admin puede cambiar estos campos
     if (isAdmin) {
       if (unique_link_code !== undefined) updateData.unique_link_code = unique_link_code
-      if (npm !== undefined) updateData.npm = npm
+      if (npn !== undefined) updateData.npn = npn
       if (epicare_number !== undefined) updateData.epicare_number = epicare_number
       if (business_name !== undefined) updateData.business_name = business_name
       if (status) updateData.status = status

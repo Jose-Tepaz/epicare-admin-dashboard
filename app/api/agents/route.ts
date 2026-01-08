@@ -155,7 +155,7 @@ export async function POST(request: NextRequest) {
       last_name,
       phone,
       unique_link_code,
-      npm,
+      npn,
       epicare_number,
       business_name,
       is_default
@@ -254,7 +254,7 @@ export async function POST(request: NextRequest) {
         email,
         phone: phone || null,
         unique_link_code: unique_link_code || null,
-        npm: npm || null,
+        npn: npn || null,
         epicare_number: epicare_number || null,
         business_name: business_name || null,
         is_default: is_default || false,
