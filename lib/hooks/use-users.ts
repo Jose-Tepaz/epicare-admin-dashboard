@@ -401,18 +401,18 @@ export function useUserDetails(userId: string | null) {
         if (Array.isArray(userViewData.available_roles)) {
           // Filtrar valores null/undefined y convertir a string
           availableRoles = userViewData.available_roles
-            .filter((r): r is string => r != null && typeof r === 'string')
-            .map(r => r.trim())
-            .filter(r => r.length > 0)
+            .filter((r: any): r is string => r != null && typeof r === 'string')
+            .map((r: string) => r.trim())
+            .filter((r: string) => r.length > 0)
         } else if (typeof userViewData.available_roles === 'string') {
           // Si viene como string, intentar parsearlo
           try {
             const parsed = JSON.parse(userViewData.available_roles)
             if (Array.isArray(parsed)) {
               availableRoles = parsed
-                .filter((r): r is string => r != null && typeof r === 'string')
-                .map(r => r.trim())
-                .filter(r => r.length > 0)
+                .filter((r: any): r is string => r != null && typeof r === 'string')
+                .map((r: string) => r.trim())
+                .filter((r: string) => r.length > 0)
             } else {
               availableRoles = [userViewData.available_roles.trim()].filter(r => r.length > 0)
             }
