@@ -246,9 +246,40 @@ export async function POST(request: NextRequest) {
         is_default: false, // No es el agente por defecto
       }
 
-      // Si se proporciona unique_link_code, usarlo
       if (unique_link_code && unique_link_code.trim()) {
-        agentProfileData.unique_link_code = unique_link_code.trim()
+        const code = unique_link_code.trim()
+        
+        // Validar formato
+        const codeRegex = /^[a-z0-9-]{3,50}$/
+        if (!codeRegex.test(code)) {
+          // Si el usuario fue creado en el paso anterior pero fallamos aquí, deberíamos limpiar
+          // Aunque idealmente estas validaciones deberían ir ANTES de crear el usuario auth
+          await adminClient.auth.admin.deleteUser(authUser.user.id)
+          await adminClient.from('users').delete().eq('id', authUser.user.id)
+          
+          return NextResponse.json({ 
+            error: 'El código del link debe tener entre 3-50 caracteres (solo letras minúsculas, números y guiones)' 
+          }, { status: 400 })
+        }
+
+        // Verificar unicidad
+        const { data: existingLink } = await adminClient
+          .from('agent_profiles')
+          .select('id')
+          .eq('unique_link_code', code)
+          .single()
+
+        if (existingLink) {
+          // Rollback usuario creado
+          await adminClient.auth.admin.deleteUser(authUser.user.id)
+          await adminClient.from('users').delete().eq('id', authUser.user.id)
+
+          return NextResponse.json({ 
+            error: 'El código de link ya está en uso por otro agente' 
+          }, { status: 400 })
+        }
+
+        agentProfileData.unique_link_code = code
       }
 
       if (npn && npn.trim()) {

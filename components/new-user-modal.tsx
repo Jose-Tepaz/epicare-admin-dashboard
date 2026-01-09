@@ -83,8 +83,8 @@ export function NewUserModal({ open, onOpenChange, onSuccess }: NewUserModalProp
 
   // Auto-generar unique_link_code cuando cambia nombre o apellido (solo si rol es agent)
   useEffect(() => {
-    if (formData.role === 'agent' && formData.first_name && formData.last_name) {
-      const generatedCode = `${formData.first_name}-${formData.last_name}`
+    if (formData.role === 'agent' && formData.first_name && formData.last_name && formData.npn) {
+      const generatedCode = `${formData.first_name}-${formData.last_name}-${formData.npn}`
         .toLowerCase()
         .normalize("NFD")
         .replace(/[\u0300-\u036f]/g, "") // Remover acentos
@@ -94,7 +94,7 @@ export function NewUserModal({ open, onOpenChange, onSuccess }: NewUserModalProp
       
       setFormData(prev => ({ ...prev, unique_link_code: generatedCode }))
     }
-  }, [formData.first_name, formData.last_name, formData.role])
+  }, [formData.first_name, formData.last_name, formData.role, formData.npn])
 
   // Determinar si mostrar el selector de agente
   // Solo admin y super_admin pueden seleccionar agente
