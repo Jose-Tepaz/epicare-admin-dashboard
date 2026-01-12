@@ -59,17 +59,20 @@ export function AgentDetailView({
   return (
     <div className="space-y-6">
       {/* Stats Cards */}
+      {showClientsTab && (
       <div className="grid gap-4 md:grid-cols-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Clientes</CardTitle>
-            <Users className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
+        
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Clientes</CardTitle>
+              <Users className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{stats.totalClients}</div>
           </CardContent>
-        </Card>
-        <Card>
+          </Card>
+        
+          <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Appointments</CardTitle>
             <Calendar className="h-4 w-4 text-muted-foreground" />
@@ -77,8 +80,8 @@ export function AgentDetailView({
           <CardContent>
             <div className="text-2xl font-bold">{stats.totalAppointments}</div>
           </CardContent>
-        </Card>
-        <Card>
+          </Card>
+          <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Licencias Activas</CardTitle>
             <FileText className="h-4 w-4 text-muted-foreground" />
@@ -86,8 +89,8 @@ export function AgentDetailView({
           <CardContent>
             <div className="text-2xl font-bold">{stats.activeLicenses}</div>
           </CardContent>
-        </Card>
-        <Card>
+          </Card>
+          <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Applications</CardTitle>
             <TrendingUp className="h-4 w-4 text-muted-foreground" />
@@ -95,8 +98,11 @@ export function AgentDetailView({
           <CardContent>
             <div className="text-2xl font-bold">{stats.totalSales}</div>
           </CardContent>
-        </Card>
+          </Card>
+        
+        
       </div>
+      )}
 
       {/* Tabs */}
       <Tabs defaultValue="info" className="space-y-4">
