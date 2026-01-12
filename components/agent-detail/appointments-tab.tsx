@@ -9,6 +9,7 @@ import {
   useCreateAppointment,
   useUpdateAppointment,
   useDeleteAppointment,
+  useInsuranceCompanies,
 } from "@/lib/hooks/use-agents"
 import {
   Dialog,
@@ -108,11 +109,9 @@ function AppointmentCard({ appointment, onUpdate }: { appointment: any; onUpdate
             {appointment.status === 'active' ? 'Activo' : appointment.status === 'expired' ? 'Expirado' : 'Pendiente'}
           </Badge>
         </div>
-        {appointment.client && (
-          <p className="text-sm text-gray-600">
-            Cliente: {appointment.client.first_name} {appointment.client.last_name}
-          </p>
-        )}
+        <p className="text-sm text-gray-600">
+          Agent Code: {appointment.agent_code || 'N/A'}
+        </p>
         {appointment.start_date && (
           <p className="text-xs text-gray-500">
             Inicio: {format(new Date(appointment.start_date), 'dd MMM yyyy', { locale: es })}
@@ -170,17 +169,17 @@ function CreateAppointmentDialog({
   onSuccess: () => void
 }) {
   const { createAppointment, creating } = useCreateAppointment()
+  const { companies, loading: loadingCompanies } = useInsuranceCompanies()
   const [formData, setFormData] = useState({
-    client_id: '',
-    insurance_company_id: '',
+    company_id: '',
+    agent_code: '',
     start_date: '',
     expiration_date: '',
     status: 'active' as 'active' | 'expired' | 'pending',
-    notes: '',
   })
 
   const handleSubmit = async () => {
-    if (!formData.client_id || !formData.insurance_company_id) {
+    if (!formData.company_id || !formData.agent_code) {
       toast.error('Por favor completa los campos requeridos')
       return
     }
@@ -205,21 +204,30 @@ function CreateAppointmentDialog({
         </DialogHeader>
         <div className="space-y-4">
           <div>
-            <Label htmlFor="client_id">Cliente ID *</Label>
-            <Input
-              id="client_id"
-              value={formData.client_id}
-              onChange={(e) => setFormData({ ...formData, client_id: e.target.value })}
-              placeholder="UUID del cliente"
-            />
+            <Label htmlFor="company_id">Aseguradora *</Label>
+            <Select 
+              value={formData.company_id} 
+              onValueChange={(value) => setFormData({ ...formData, company_id: value })}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder={loadingCompanies ? "Cargando..." : "Selecciona una aseguradora"} />
+              </SelectTrigger>
+              <SelectContent>
+                {companies.map((company) => (
+                  <SelectItem key={company.id} value={company.id}>
+                    {company.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
           <div>
-            <Label htmlFor="insurance_company_id">Aseguradora ID *</Label>
+            <Label htmlFor="agent_code">Código de Agente *</Label>
             <Input
-              id="insurance_company_id"
-              value={formData.insurance_company_id}
-              onChange={(e) => setFormData({ ...formData, insurance_company_id: e.target.value })}
-              placeholder="UUID de la aseguradora"
+              id="agent_code"
+              value={formData.agent_code}
+              onChange={(e) => setFormData({ ...formData, agent_code: e.target.value })}
+              placeholder="Ej: A12345"
             />
           </div>
           <div className="grid grid-cols-2 gap-4">
@@ -255,15 +263,6 @@ function CreateAppointmentDialog({
               </SelectContent>
             </Select>
           </div>
-          <div>
-            <Label htmlFor="notes">Notas</Label>
-            <Textarea
-              id="notes"
-              value={formData.notes}
-              onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-              placeholder="Notas adicionales..."
-            />
-          </div>
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>
@@ -298,10 +297,10 @@ function EditAppointmentDialog({
 }) {
   const { updateAppointment, updating } = useUpdateAppointment()
   const [formData, setFormData] = useState({
+    agent_code: appointment.agent_code || '',
     start_date: appointment.start_date || '',
     expiration_date: appointment.expiration_date || '',
     status: appointment.status || 'active',
-    notes: appointment.notes || '',
   })
 
   const handleSubmit = async () => {
@@ -319,6 +318,15 @@ function EditAppointmentDialog({
           <DialogTitle>Editar Appointment</DialogTitle>
         </DialogHeader>
         <div className="space-y-4">
+          <div>
+            <Label htmlFor="agent_code">Código de Agente</Label>
+            <Input
+              id="agent_code"
+              value={formData.agent_code}
+              onChange={(e) => setFormData({ ...formData, agent_code: e.target.value })}
+              placeholder="Ej: A12345"
+            />
+          </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
               <Label htmlFor="start_date">Fecha de Inicio</Label>
@@ -351,15 +359,6 @@ function EditAppointmentDialog({
                 <SelectItem value="expired">Expirado</SelectItem>
               </SelectContent>
             </Select>
-          </div>
-          <div>
-            <Label htmlFor="notes">Notas</Label>
-            <Textarea
-              id="notes"
-              value={formData.notes}
-              onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-              placeholder="Notas adicionales..."
-            />
           </div>
         </div>
         <DialogFooter>

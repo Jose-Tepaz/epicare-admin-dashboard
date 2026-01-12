@@ -45,22 +45,18 @@ export async function PUT(
     // Obtener datos del body
     const body = await request.json()
     const {
-      agent_number,
+      agent_code,
       start_date,
       expiration_date,
-      status,
-      commission_percentage,
-      additional_data
+      status
     } = body
 
     const updateData: any = {}
 
-    if (agent_number !== undefined) updateData.agent_number = agent_number
+    if (agent_code !== undefined) updateData.agent_code = agent_code
     if (start_date !== undefined) updateData.start_date = start_date
     if (expiration_date !== undefined) updateData.expiration_date = expiration_date
     if (status) updateData.status = status
-    if (commission_percentage !== undefined) updateData.commission_percentage = commission_percentage
-    if (additional_data !== undefined) updateData.additional_data = additional_data
 
     // Actualizar is_active basado en status
     if (status) {
@@ -74,13 +70,13 @@ export async function PUT(
       .eq('id', appointmentId)
       .select(`
         *,
-        agent:agent_profiles!appointments_agent_profile_id_fkey (
+        agent:agent_profiles!agent_insurance_registrations_agent_profile_id_fkey (
           id,
           first_name,
           last_name,
           business_name
         ),
-        company:insurance_companies!appointments_company_id_fkey (
+        insurance_company:insurance_companies!agent_insurance_registrations_company_id_fkey (
           id,
           name,
           logo_url

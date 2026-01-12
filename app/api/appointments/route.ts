@@ -39,7 +39,7 @@ export async function GET(request: NextRequest) {
 
     // Obtener parámetros
     const searchParams = request.nextUrl.searchParams
-    const agentId = searchParams.get('agent_id')
+    const agentProfileId = searchParams.get('agent_profile_id')
     const companyId = searchParams.get('company_id')
     const status = searchParams.get('status')
 
@@ -48,13 +48,13 @@ export async function GET(request: NextRequest) {
       .from('appointments')
       .select(`
         *,
-        agent:agent_profiles!appointments_agent_profile_id_fkey (
+        agent:agent_profiles!agent_insurance_registrations_agent_profile_id_fkey (
           id,
           first_name,
           last_name,
           business_name
         ),
-        company:insurance_companies!appointments_company_id_fkey (
+        insurance_company:insurance_companies!agent_insurance_registrations_company_id_fkey (
           id,
           name,
           logo_url
@@ -63,8 +63,8 @@ export async function GET(request: NextRequest) {
       .order('created_at', { ascending: false })
 
     // Aplicar filtros
-    if (agentId) {
-      query = query.eq('agent_profile_id', agentId)
+    if (agentProfileId) {
+      query = query.eq('agent_profile_id', agentProfileId)
     }
 
     if (companyId) {
@@ -82,7 +82,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Error al obtener appointments' }, { status: 500 })
     }
 
-    return NextResponse.json({ appointments })
+    return NextResponse.json({ data: appointments })
   } catch (error) {
     console.error('Error in GET /api/appointments:', error)
     return NextResponse.json({ error: 'Error interno del servidor' }, { status: 500 })
@@ -130,17 +130,15 @@ export async function POST(request: NextRequest) {
       agent_profile_id,
       company_id,
       agent_code,
-      agent_number,
       start_date,
       expiration_date,
-      commission_percentage,
-      additional_data
+      status
     } = body
 
     // Validaciones
-    if (!agent_profile_id || !company_id || !agent_code || !agent_number) {
+    if (!agent_profile_id || !company_id || !agent_code) {
       return NextResponse.json({ 
-        error: 'agent_profile_id, company_id, agent_code y agent_number son requeridos' 
+        error: 'agent_profile_id, company_id y agent_code son requeridos' 
       }, { status: 400 })
     }
 
@@ -165,23 +163,20 @@ export async function POST(request: NextRequest) {
         agent_profile_id,
         company_id,
         agent_code,
-        agent_number,
         start_date: start_date || null,
         expiration_date: expiration_date || null,
-        commission_percentage: commission_percentage || null,
-        additional_data: additional_data || null,
-        status: 'active',
+        status: status || 'active',
         is_active: true
       })
       .select(`
         *,
-        agent:agent_profiles!appointments_agent_profile_id_fkey (
+        agent:agent_profiles!agent_insurance_registrations_agent_profile_id_fkey (
           id,
           first_name,
           last_name,
           business_name
         ),
-        company:insurance_companies!appointments_company_id_fkey (
+        insurance_company:insurance_companies!agent_insurance_registrations_company_id_fkey (
           id,
           name,
           logo_url

@@ -30,8 +30,8 @@ export interface AgentProfile {
 export interface Appointment {
   id: string
   agent_profile_id: string
-  client_id: string
-  insurance_company_id: string
+  company_id: string
+  agent_code: string
   start_date: string | null
   expiration_date: string | null
   status: 'active' | 'expired' | 'pending'
@@ -39,12 +39,9 @@ export interface Appointment {
   created_at: string
   updated_at: string
   insurance_company?: {
+    id: string
     name: string
-  }
-  client?: {
-    first_name: string | null
-    last_name: string | null
-    email: string
+    logo_url: string
   }
 }
 
@@ -218,12 +215,11 @@ export function useCreateAppointment() {
 
   const createAppointment = async (appointmentData: {
     agent_profile_id: string
-    client_id: string
-    insurance_company_id: string
+    company_id: string
+    agent_code: string
     start_date?: string
     expiration_date?: string
     status?: 'active' | 'expired' | 'pending'
-    notes?: string
   }) => {
     try {
       setCreating(true)
@@ -255,6 +251,47 @@ export function useCreateAppointment() {
   }
 
   return { createAppointment, creating }
+}
+
+// ============================================================================
+// Hook: useInsuranceCompanies - Obtener lista de compañías de seguros
+// ============================================================================
+
+export interface InsuranceCompany {
+  id: string
+  name: string
+  logo_url: string
+}
+
+export function useInsuranceCompanies() {
+  const [companies, setCompanies] = useState<InsuranceCompany[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    const fetchCompanies = async () => {
+      try {
+        setLoading(true)
+        const response = await fetch('/api/insurance-companies')
+        const data = await response.json()
+
+        if (!response.ok) {
+          throw new Error(data.error || 'Error fetching companies')
+        }
+
+        setCompanies(data.data || [])
+      } catch (err) {
+        console.error('Error fetching insurance companies:', err)
+        setError(err instanceof Error ? err.message : 'Error desconocido')
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchCompanies()
+  }, [])
+
+  return { companies, loading, error }
 }
 
 // ============================================================================
