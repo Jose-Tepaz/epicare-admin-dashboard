@@ -21,6 +21,7 @@ export interface UserWithStats {
     description: string | null
   }>
   application_count: number
+  is_default_agent?: boolean
 }
 
 export function useUsers(
@@ -181,7 +182,8 @@ export function useUsers(
             role,
             created_at,
             profile_completed,
-            password_set
+            password_set,
+            agent_profile:agent_profiles!agent_profiles_user_id_fkey(is_default)
           `, { count: 'exact' })
 
         // Aplicar filtros de fecha
@@ -245,13 +247,13 @@ export function useUsers(
 
             return {
               ...user,
-              // Convertir role string a formato de array para compatibilidad con código existente
               roles: user.role ? [{ 
                 id: user.role, 
                 name: user.role, 
                 description: null 
               }] : [],
               application_count: appCount || 0,
+              is_default_agent: user.agent_profile?.[0]?.is_default || user.agent_profile?.is_default || false,
             }
           } catch (err) {
             console.error(`Error fetching details for user ${user.id}:`, err)

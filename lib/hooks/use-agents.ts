@@ -18,6 +18,7 @@ export interface AgentProfile {
   last_name: string | null
   photo_url: string | null
   status: 'active' | 'inactive' | 'pending' | null
+  is_default: boolean | null
   join_date: string | null
   created_at: string
   updated_at: string

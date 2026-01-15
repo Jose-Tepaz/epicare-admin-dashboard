@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
-import { Eye, Search, Loader2, Mail, Phone, Shield, UserPlus, Trash2, MailPlus, Copy, Check } from "lucide-react"
+import { Eye, Search, Loader2, Mail, Phone, Shield, UserPlus, Trash2, MailPlus, Copy, Check, Star } from "lucide-react"
 import { useUsers, useDeleteUser, useResendInvite } from "@/lib/hooks/use-users"
 import { useAdminAuth } from "@/contexts/admin-auth-context"
 import {
@@ -176,9 +176,6 @@ export function UsersTable() {
                     <th className="text-left py-3 px-4 font-medium text-sm text-gray-600">Usuario</th>
                     <th className="text-left py-3 px-4 font-medium text-sm text-gray-600">Contacto</th>
                     <th className="text-left py-3 px-4 font-medium text-sm text-gray-600">Roles</th>
-                    {['all', 'client'].includes(roleFilter) && (
-                      <th className="text-left py-3 px-4 font-medium text-sm text-gray-600">Applications</th>
-                    )}
                     <th className="text-left py-3 px-4 font-medium text-sm text-gray-600">Fecha de Registro</th>
                     <th className="text-left py-3 px-4 font-medium text-sm text-gray-600">Acciones</th>
                   </tr>
@@ -232,23 +229,33 @@ export function UsersTable() {
                                 </Badge>
                               ))
                             ) : (
-                              <Badge variant="outline" className="text-xs">user</Badge>
-                            )}
-                            {/* Badge de estado de invitación */}
+                              <Badge variant="outline" className="text-xs">
+                                  user
+                                </Badge>
+                              )}
+                              {/* Default Agent Badge */}
+                              {user.is_default_agent && (
+                                <Badge variant="outline" className="text-xs bg-yellow-50 text-yellow-700 border-yellow-200">
+                                  <Star className="h-3 w-3 mr-1 fill-yellow-500 text-yellow-500" />
+                                  Default Agent
+                                </Badge>
+                              )}
+                                {/* If client */}
+                                {user.roles.some(r => r.name === 'client') && (
+                                <Badge variant="secondary" className="text-xs bg-blue-50 text-blue-700 border-blue-200">
+                                  {user.application_count} {user.application_count === 1 ? 'application' : 'applications'}
+                                </Badge>
+                              )}
+                              {/* Badge de estado de invitación 
                             {!user.password_set && (
                               <Badge variant="outline" className="text-xs text-amber-600 border-amber-300 bg-amber-50">
                                 Pendiente
                               </Badge>
                             )}
+                              */}
                           </div>
                         </td>
-                        {['all', 'client'].includes(roleFilter) && (
-                          <td className="py-3 px-4">
-                            <Badge variant="secondary">
-                              {user.application_count} {user.application_count === 1 ? 'application' : 'applications'}
-                            </Badge>
-                          </td>
-                        )}
+                        
                         <td className="py-3 px-4 min-w-40">
                           <span className="text-sm text-gray-600">
                             {format(new Date(user.created_at), 'dd MMM yyyy', { locale: es })}

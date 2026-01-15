@@ -13,7 +13,9 @@ import {
   Check,
   Edit,
   Loader2,
+  Star,
 } from "lucide-react"
+import { Switch } from "@/components/ui/switch"
 import {
   useUpdateAgentProfile,
 } from "@/lib/hooks/use-agents"
@@ -37,6 +39,7 @@ export function AgentInfoTab({ agent, onUpdate }: { agent: any; onUpdate: () => 
     npn: agent?.npn || '',
     epicare_number: agent?.epicare_number || '',
     status: safeStatus,
+    is_default: agent?.is_default || false,
   })
 
   // Validar que unique_link_code no sea null
@@ -125,8 +128,24 @@ export function AgentInfoTab({ agent, onUpdate }: { agent: any; onUpdate: () => 
                   </SelectContent>
                 </Select>
               </div>
-            </div>
-            <div className="flex gap-2">
+              </div>
+              
+              <div className="flex items-center space-x-2 border p-4 rounded-lg bg-gray-50">
+                <Switch
+                  id="is_default"
+                  checked={formData.is_default}
+                  onCheckedChange={(checked) => setFormData({ ...formData, is_default: checked })}
+                />
+                <div className="flex-1">
+                  <Label htmlFor="is_default" className="text-base font-medium">Agente por Defecto</Label>
+                  <p className="text-sm text-gray-500">
+                    Si se activa, este será el agente asignado automáticamente a los nuevos usuarios. 
+                    Solo puede haber un agente por defecto.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex gap-2">
               <Button onClick={handleSave} disabled={updating}>
                 {updating ? (
                   <>
@@ -177,6 +196,19 @@ export function AgentInfoTab({ agent, onUpdate }: { agent: any; onUpdate: () => 
                 </Button>
               </div>
             </div>
+
+            {/* Default Agent Badge */}
+            {agent.is_default && (
+              <div className="p-4 bg-yellow-50 rounded-lg border border-yellow-200 flex items-center gap-3">
+                <div className="p-2 bg-yellow-100 rounded-full">
+                  <Star className="h-5 w-5 text-yellow-600 fill-yellow-600" />
+                </div>
+                <div>
+                  <h4 className="font-medium text-yellow-900">Agente por Defecto</h4>
+                  <p className="text-sm text-yellow-700">Este agente está configurado como el predeterminado del sistema.</p>
+                </div>
+              </div>
+            )}
 
             {/* Información */}
             <div className="grid md:grid-cols-2 gap-4">
