@@ -1,13 +1,14 @@
 "use client"
 
 import { useRouter, useParams } from "next/navigation"
-import { AdminLayout } from "@/components/admin-layout"
+
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { ArrowLeft, Loader2 } from "lucide-react"
 import { useApplicationDetails, useUpdateApplicationStatus } from "@/lib/hooks/use-applications"
 import { useAdminAuth } from "@/contexts/admin-auth-context"
+import { useAdminData } from "@/contexts/admin-data-context"
 import {
   UserInformationCard,
   InsuranceCompanyCard,
@@ -28,20 +29,18 @@ export default function RequestDetailsPage() {
   const { application, loading, error, refetch } = useApplicationDetails(applicationId)
   const { updateStatus } = useUpdateApplicationStatus()
   const { permissions } = useAdminAuth()
+  const { refreshStats } = useAdminData()
 
   if (loading) {
     return (
-      <AdminLayout currentPage="Requests">
-        <div className="flex-1 p-4 md:p-6 flex items-center justify-center">
-          <Loader2 className="h-12 w-12 animate-spin text-gray-400" />
-        </div>
-      </AdminLayout>
+      <div className="flex-1 p-4 md:p-6 flex items-center justify-center">
+        <Loader2 className="h-12 w-12 animate-spin text-gray-400" />
+      </div>
     )
   }
 
   if (error || !application) {
     return (
-      <AdminLayout currentPage="Requests">
         <div className="flex-1 p-4 md:p-6">
           <Card>
             <CardContent className="p-6">
@@ -59,7 +58,6 @@ export default function RequestDetailsPage() {
             </CardContent>
           </Card>
         </div>
-      </AdminLayout>
     )
   }
 
@@ -67,7 +65,6 @@ export default function RequestDetailsPage() {
   const StatusIcon = status.icon
 
   return (
-    <AdminLayout currentPage="Requests">
       <div className="flex-1 space-y-6 p-4 md:p-6">
         {/* Header */}
         <div className="flex items-center justify-between">
@@ -114,7 +111,10 @@ export default function RequestDetailsPage() {
           <div className="space-y-6">
             <ActionButtonsCard
               application={application}
-              onSuccess={refetch}
+              onSuccess={() => {
+                refetch()
+                refreshStats()
+              }}
             />
             
             <StatusUpdateCard
@@ -122,7 +122,10 @@ export default function RequestDetailsPage() {
               currentStatus={application.status}
               permissions={permissions as any}
               onStatusUpdate={updateStatus}
-              onSuccess={refetch}
+              onSuccess={() => {
+                refetch()
+                refreshStats()
+              }}
             />
             
             <SubmissionResultsCard 
@@ -133,6 +136,5 @@ export default function RequestDetailsPage() {
           </div>
         </div>
       </div>
-    </AdminLayout>
   )
 }

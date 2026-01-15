@@ -1,13 +1,11 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { AdminLayout } from "@/components/admin-layout"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
-import { Switch } from "@/components/ui/switch"
 import { Textarea } from "@/components/ui/textarea"
 import { User, Shield, Loader2, Eye, EyeOff } from "lucide-react"
 import { useAdminAuth } from "@/contexts/admin-auth-context"
@@ -181,7 +179,6 @@ export default function SettingsPage() {
   // Si es agente, mostrar su perfil de agente + configuración estándar
   if (isAgent && user) {
     return (
-      <AdminLayout currentPage="Settings">
         <div className="p-6 space-y-8">
           {/* Sección: Perfil de Agente */}
           <div>
@@ -421,13 +418,11 @@ export default function SettingsPage() {
             </Tabs>
           </div>
         </div>
-      </AdminLayout>
     )
   }
 
   // Para admin, super_admin, support_staff: mostrar configuración genérica
   return (
-    <AdminLayout currentPage="Settings">
       <div className="p-6">
         <div className="mb-6">
           <h1 className="text-3xl font-bold text-gray-900">Settings</h1>
@@ -648,6 +643,5 @@ export default function SettingsPage() {
           </TabsContent>
         </Tabs>
       </div>
-    </AdminLayout>
   )
 }

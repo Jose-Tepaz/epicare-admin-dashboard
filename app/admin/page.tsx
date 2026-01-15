@@ -1,6 +1,6 @@
 "use client"
 
-import { AdminLayout } from "@/components/admin-layout"
+
 import { AdminOverview } from "@/components/admin-overview"
 import { AdminStats } from "@/components/admin-stats"
 import { RecentActivity } from "@/components/recent-activity"
@@ -47,7 +47,6 @@ export default function AdminDashboard() {
   const messages = getDashboardMessages()
 
   return (
-    <AdminLayout currentPage="Dashboard">
       <div className="flex-1 space-y-6 p-4 md:p-6">
         {/* Dashboard Title */}
         <div className="space-y-2">
@@ -64,6 +63,5 @@ export default function AdminDashboard() {
           <RecentActivity />
         </div>
       </div>
-    </AdminLayout>
   )
 }

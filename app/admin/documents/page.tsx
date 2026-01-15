@@ -1,10 +1,8 @@
-import { AdminLayout } from "@/components/admin-layout"
 import { DocumentsManager } from "@/components/documents-manager"
 import { DocumentsStats } from "@/components/documents-stats"
 
 export default function AdminDocumentsPage() {
   return (
-    <AdminLayout currentPage="Documents">
       <div className="flex-1 space-y-6 p-4 md:p-6">
         {/* Page Header */}
         <div className="space-y-2">
@@ -18,6 +16,5 @@ export default function AdminDocumentsPage() {
         {/* Documents Manager */}
         <DocumentsManager />
       </div>
-    </AdminLayout>
   )
 }

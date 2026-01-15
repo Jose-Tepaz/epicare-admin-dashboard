@@ -1,6 +1,6 @@
 "use client"
 
-import { AdminLayout } from "@/components/admin-layout"
+
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -23,6 +23,7 @@ import {
 import { useState } from "react"
 import Link from "next/link"
 import { useTicketDetails, useCreateTicketMessage, useUpdateTicket } from "@/lib/hooks/use-tickets"
+import { useAdminData } from "@/contexts/admin-data-context"
 import type { TicketStatus, TicketPriority } from "@/lib/types/admin"
 import { useRouter } from "next/navigation"
 
@@ -137,6 +138,7 @@ export default function SupportTicketDetailsPage({ params }: { params: { id: str
   const { ticket, messages, loading, error, refetch } = useTicketDetails(params.id)
   const { createMessage, loading: sendingMessage } = useCreateTicketMessage()
   const { updateStatus, updatePriority, assignTicket, loading: updatingTicket } = useUpdateTicket()
+  const { refreshStats } = useAdminData()
 
   const [newMessage, setNewMessage] = useState("")
   const [localStatus, setLocalStatus] = useState<TicketStatus | null>(null)
@@ -152,6 +154,7 @@ export default function SupportTicketDetailsPage({ params }: { params: { id: str
     if (message) {
       setNewMessage("")
       refetch() // Refresh ticket details
+      refreshStats() // Refresh admin stats (e.g. recent activity)
     }
   }
 
@@ -162,6 +165,7 @@ export default function SupportTicketDetailsPage({ params }: { params: { id: str
     const success = await updateStatus(ticket.id, newStatus)
     if (success) {
       refetch()
+      refreshStats()
     } else {
       setLocalStatus(null)
     }
@@ -174,6 +178,7 @@ export default function SupportTicketDetailsPage({ params }: { params: { id: str
     const success = await updatePriority(ticket.id, newPriority)
     if (success) {
       refetch()
+      refreshStats()
     } else {
       setLocalPriority(null)
     }
@@ -181,19 +186,16 @@ export default function SupportTicketDetailsPage({ params }: { params: { id: str
 
   if (loading) {
     return (
-      <AdminLayout currentPage="Support">
         <div className="p-6">
           <div className="flex justify-center py-12">
             <Loader2 className="h-12 w-12 animate-spin text-gray-400" />
           </div>
         </div>
-      </AdminLayout>
     )
   }
 
   if (error || !ticket) {
     return (
-      <AdminLayout currentPage="Support">
         <div className="p-6">
           <div className="text-center py-12">
             <h2 className="text-2xl font-bold text-gray-900 mb-2">Ticket No Encontrado</h2>
@@ -208,12 +210,10 @@ export default function SupportTicketDetailsPage({ params }: { params: { id: str
             </Link>
           </div>
         </div>
-      </AdminLayout>
     )
   }
 
   return (
-    <AdminLayout currentPage="Support">
       <div className="p-6 space-y-6">
         {/* Header */}
         <div className="flex items-center justify-between">
@@ -474,6 +474,5 @@ export default function SupportTicketDetailsPage({ params }: { params: { id: str
           </div>
         </div>
       </div>
-    </AdminLayout>
   )
 }

@@ -7,26 +7,27 @@ import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Menu, X, Settings, Users, FileText, ClipboardList, BarChart3, Bell, LogOut } from "lucide-react"
 import Link from "next/link"
+import { usePathname } from "next/navigation"
 import { useAdminAuth } from "@/contexts/admin-auth-context"
 import { NotificationsDropdown } from "@/components/notifications-dropdown"
 import { RoleSwitcher } from "@/components/role-switcher"
 import { useNotifications } from "@/lib/hooks/use-notifications"
 
 const adminNavigationItems = [
-  { name: "Dashboard", href: "/admin", icon: BarChart3, active: false },
-  { name: "Requests", href: "/admin/requests", icon: ClipboardList, active: false },
-  { name: "Documents", href: "/admin/documents", icon: FileText, active: false },
-  { name: "Users", href: "/admin/users", icon: Users, active: false },
-  { name: "Support", href: "/admin/support", icon: Bell, active: false },
+  { name: "Dashboard", href: "/admin", icon: BarChart3, exact: true },
+  { name: "Requests", href: "/admin/requests", icon: ClipboardList },
+  { name: "Documents", href: "/admin/documents", icon: FileText },
+  { name: "Users", href: "/admin/users", icon: Users },
+  { name: "Support", href: "/admin/support", icon: Bell },
 ]
 
 interface AdminLayoutProps {
   children: React.ReactNode
-  currentPage?: string
 }
 
-export function AdminLayout({ children, currentPage = "Dashboard" }: AdminLayoutProps) {
+export function AdminLayout({ children }: AdminLayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const pathname = usePathname()
   const { user, signOut } = useAdminAuth()
   
   // Hook de notificaciones a nivel de layout para evitar múltiples suscripciones
@@ -35,6 +36,13 @@ export function AdminLayout({ children, currentPage = "Dashboard" }: AdminLayout
   const getInitials = (email: string | undefined | null) => {
     if (!email) return 'U'
     return email.slice(0, 2).toUpperCase()
+  }
+
+  const isItemActive = (item: { href: string, exact?: boolean }) => {
+    if (item.exact) {
+      return pathname === item.href
+    }
+    return pathname?.startsWith(item.href)
   }
 
   return (
@@ -77,13 +85,14 @@ export function AdminLayout({ children, currentPage = "Dashboard" }: AdminLayout
           <nav className="flex-1 px-4 space-y-2">
             {adminNavigationItems.map((item) => {
               const Icon = item.icon
+              const active = isItemActive(item)
               return (
                 <Link
                   key={item.name}
                   href={item.href}
                   className={cn(
                     "flex items-center gap-3 px-4 py-3 text-sm font-medium rounded-lg transition-colors",
-                    item.name === currentPage
+                    active
                       ? "bg-[#F26023] text-white"
                       : "text-slate-300 hover:bg-[#3a4145] hover:text-white",
                   )}
@@ -176,3 +185,4 @@ export function AdminLayout({ children, currentPage = "Dashboard" }: AdminLayout
     </div>
   )
 }
+

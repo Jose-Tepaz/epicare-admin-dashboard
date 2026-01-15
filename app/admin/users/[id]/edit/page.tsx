@@ -2,7 +2,6 @@
 
 import { useState } from "react"
 import { useParams, useRouter } from "next/navigation"
-import { AdminLayout } from "@/components/admin-layout"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -48,12 +47,12 @@ export default function EditUserPage() {
       .toUpperCase()
   }
 
-  const handleInputChange = (field: string, value: string, section?: string) => {
-    if (section) {
+  const handleInputChange = (field: string, value: string, section?: keyof typeof mockUser) => {
+    if (section && typeof formData[section] === 'object' && formData[section] !== null) {
       setFormData((prev) => ({
         ...prev,
         [section]: {
-          ...prev[section as keyof typeof prev],
+          ...(prev[section] as object),
           [field]: value,
         },
       }))
@@ -74,7 +73,6 @@ export default function EditUserPage() {
   }
 
   return (
-    <AdminLayout currentPage="Users">
       <div className="flex-1 space-y-6 p-4 md:p-6">
         {/* Header */}
         <div className="flex items-center justify-between">
@@ -258,6 +256,5 @@ export default function EditUserPage() {
           </div>
         </div>
       </div>
-    </AdminLayout>
   )
 }

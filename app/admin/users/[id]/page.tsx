@@ -2,7 +2,7 @@
 
 import { useState, useMemo } from "react"
 import { useRouter, useParams } from "next/navigation"
-import { AdminLayout } from "@/components/admin-layout"
+
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -27,6 +27,7 @@ import {
 } from "lucide-react"
 import { useUserDetails, useUpdateUser, useAssignRole, useRemoveRole, useAvailableRoles } from "@/lib/hooks/use-users"
 import { useAdminAuth } from "@/contexts/admin-auth-context"
+import { useAdminData } from "@/contexts/admin-data-context"
 import { format } from "date-fns"
 import { es } from "date-fns/locale"
 import Link from "next/link"
@@ -53,6 +54,7 @@ export default function UserDetailsPage() {
   const { removeRole, removing } = useRemoveRole()
   const { roles: availableRoles } = useAvailableRoles()
   const { permissions, isSuperAdmin } = useAdminAuth()
+  const { refreshStats } = useAdminData()
 
   const [isEditing, setIsEditing] = useState(false)
   const [editedUser, setEditedUser] = useState({
@@ -81,17 +83,14 @@ export default function UserDetailsPage() {
 
   if (loading) {
     return (
-      <AdminLayout currentPage="Users">
         <div className="flex-1 p-4 md:p-6 flex items-center justify-center">
           <Loader2 className="h-12 w-12 animate-spin text-gray-400" />
         </div>
-      </AdminLayout>
     )
   }
 
   if (error || !user) {
     return (
-      <AdminLayout currentPage="Users">
         <div className="flex-1 p-4 md:p-6">
           <Card>
             <CardContent className="p-6">
@@ -107,7 +106,6 @@ export default function UserDetailsPage() {
             </CardContent>
           </Card>
         </div>
-      </AdminLayout>
     )
   }
 
@@ -127,6 +125,7 @@ export default function UserDetailsPage() {
     if (success) {
       setIsEditing(false)
       refetch()
+      refreshStats()
     }
   }
 
@@ -171,7 +170,6 @@ export default function UserDetailsPage() {
   }
 
   return (
-    <AdminLayout currentPage="Users">
       <div className="flex-1 space-y-6 p-4 md:p-6">
         {/* Header */}
         <div className="flex items-center justify-between">
@@ -478,6 +476,5 @@ export default function UserDetailsPage() {
           </div>
         </div>
       </div>
-    </AdminLayout>
   )
 }

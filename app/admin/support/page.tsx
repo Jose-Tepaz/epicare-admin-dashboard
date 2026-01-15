@@ -1,6 +1,6 @@
 "use client"
 
-import { AdminLayout } from "@/components/admin-layout"
+
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -132,7 +132,6 @@ export default function SupportRequestsPage() {
   const { stats, loading: statsLoading } = useTicketStats()
 
   return (
-    <AdminLayout currentPage="Support">
       <div className="p-6 space-y-6">
         {/* Header */}
         <div className="flex items-center justify-between">
@@ -348,6 +347,5 @@ export default function SupportRequestsPage() {
           </CardContent>
         </Card>
       </div>
-    </AdminLayout>
   )
 }

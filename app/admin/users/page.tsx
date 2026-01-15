@@ -1,10 +1,8 @@
-import { AdminLayout } from "@/components/admin-layout"
 import { UsersTable } from "@/components/users-table"
 import { UsersStats } from "@/components/users-stats"
 
 export default function AdminUsersPage() {
   return (
-    <AdminLayout currentPage="Users">
       <div className="flex-1 space-y-6 p-4 md:p-6">
         {/* Page Header */}
         <div className="space-y-2">
@@ -18,6 +16,5 @@ export default function AdminUsersPage() {
         {/* Users Table */}
         <UsersTable />
       </div>
-    </AdminLayout>
   )
 }

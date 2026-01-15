@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { useRouter, useParams } from "next/navigation"
-import { AdminLayout } from "@/components/admin-layout"
+
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -157,16 +157,13 @@ export default function EditApplicationPage() {
 
   if (loading) {
     return (
-      <AdminLayout currentPage="Requests">
-        <div className="flex-1 p-4 md:p-6 flex items-center justify-center">
-          <Loader2 className="h-12 w-12 animate-spin text-gray-400" />
-        </div>
-      </AdminLayout>
+      <div className="flex-1 p-4 md:p-6 flex items-center justify-center">
+        <Loader2 className="h-12 w-12 animate-spin text-gray-400" />
+      </div>
     )
   }
 
   return (
-    <AdminLayout currentPage="Requests">
       <div className="flex-1 space-y-6 p-4 md:p-6">
         {/* Header */}
         <div className="flex items-center justify-between">
@@ -344,7 +341,6 @@ export default function EditApplicationPage() {
           </CardContent>
         </Card>
       </div>
-    </AdminLayout>
   )
 }
 
