@@ -531,25 +531,7 @@ function AdminLogin() {
           </form>
         )}
 
-        <div className="mt-4 pt-4 border-t border-gray-100">
-          <div className="text-center space-y-3">
-            <Button
-              variant="outline"
-              className="w-full text-sm"
-              onClick={() => router.push('/admin/set-password')}
-            >
-              ¿Tienes problemas con tu invitación?
-            </Button>
-            
-            <Button
-              variant="ghost"
-              className="w-full text-xs text-gray-400 h-6"
-              onClick={() => router.push('/admin/test-rls')}
-            >
-              Diagnóstico de conexión
-            </Button>
-          </div>
-        </div>
+        
 
         {/* Nota de seguridad */}
         <div className="mt-6 text-center text-sm text-gray-500">

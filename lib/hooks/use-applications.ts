@@ -110,7 +110,7 @@ export function useApplications(
     }
   }, [
     authLoading,
-    user,
+    user?.id,
     statusKey,
     filters.search,
     filters.startDate,

@@ -45,6 +45,10 @@ export function AdminLayout({ children }: AdminLayoutProps) {
     return pathname?.startsWith(item.href)
   }
 
+  if (pathname === '/admin/login' || pathname === '/admin/set-password' || pathname === '/admin/complete-profile' || pathname === '/admin/reset-password') {
+    return <main className="min-h-screen bg-gray-50">{children}</main>
+  }
+
   return (
     <div className="flex h-screen bg-gray-50">
       {/* Mobile sidebar overlay */}

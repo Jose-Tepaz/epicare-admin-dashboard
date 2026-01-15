@@ -293,7 +293,7 @@ export function useUsers(
     }
   }, [
     authLoading,
-    user,
+    user?.id,
     roleKey,
     filters.search,
     filters.startDate,

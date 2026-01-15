@@ -270,10 +270,10 @@ export function AdminDataProvider({ children }: { children: React.ReactNode }) {
   }, [refreshStats, refreshChartData, refreshRecentActivity])
 
   useEffect(() => {
-    if (!authLoading && user) {
+    if (!authLoading && user?.id) {
       refreshAll()
     }
-  }, [authLoading, user, refreshAll])
+  }, [authLoading, user?.id, refreshAll])
 
   return (
     <AdminDataContext.Provider value={{
