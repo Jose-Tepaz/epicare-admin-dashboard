@@ -356,7 +356,7 @@ function AdminLogin() {
 
     try {
       const { error: resetError } = await supabase.auth.resetPasswordForEmail(resetEmail, {
-        redirectTo: `${window.location.origin}/admin/reset-password`,
+        redirectTo: `${window.location.origin}/auth/callback?next=/admin/reset-password&type=recovery`,
       })
 
       if (resetError) {

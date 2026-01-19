@@ -187,9 +187,11 @@ Usuario: Revisa email (Inbucket local)
       ↓
 Click en enlace del email
       ↓
-Redirige a /admin/reset-password
+Redirige a /auth/callback (Intercambio de código PKCE)
       ↓
-Sistema: Valida token y establece sesión
+Sistema: Establece sesión
+      ↓
+Redirige a /admin/reset-password
       ↓
 Formulario: Nueva contraseña + Confirmar
       ↓
